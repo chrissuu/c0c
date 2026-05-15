@@ -203,8 +203,26 @@ def translateCmd
   | .move dest src =>
     -- transVal will be an atom (i.e., reg, imm) at this point
     let (stms, transVal, tau, tc', tenv') := translateExpr src tc fenv tenv
+    let bindDestToValue (value : IR.Val) (tcBase : TempCounter) (tenvBase : TEnv) :=
+      match value with
+      | .var t =>
+        let destTempInfo := TempInfo.mk t tau false
+        ( stms
+        , none
+        , tcBase
+        , tenvBase.insert dest.name destTempInfo)
+
+      | .bitVec _ =>
+        let (ptr, tcNext) := Temp.bumpAndCreate tcBase
+        let destTempInfo := TempInfo.mk ptr tau true
+        ( stms ++ [ Stm.alloca (.ptr ptr) tau ]
+        , some ptr
+        , tcNext
+        , tenvBase.insert dest.name destTempInfo)
+
+      | _ => panic! "[Error] after translating expr type, expect REG/IMM but found something else"
     let (stms', ptrOpt, tc'', tenv'') :=
-      match tenv.get? dest.name with
+      match tenv'.get? dest.name with
       | some destTempInfo =>
         match destTempInfo.isPtr with
         | true =>
@@ -214,29 +232,12 @@ def translateCmd
           , tenv')
 
         | false =>
-          (stms
-          , none
-          , tc'
-          , tenv')
+          -- since dest is not a pointer type, update tenv to carry this src's value
+          bindDestToValue transVal tc' tenv'
 
       | none =>
-        match transVal with
-        | .var t =>
-          let destTempInfo := TempInfo.mk t tau false
-          ( stms
-          , none
-          , tc'
-          , tenv'.insert dest.name destTempInfo)
-
-        | .bitVec _ =>
-          let (ptr, tc'') := Temp.bumpAndCreate tc'
-          let destTempInfo := TempInfo.mk ptr tau true
-          ( stms ++ [ Stm.alloca (.ptr ptr) .i32 ]
-          , some ptr
-          , tc''
-          , tenv'.insert dest.name destTempInfo)
-
-        | _ => panic! "[Error] after translating expr type, expect REG/IMM but found something else"
+        -- dest is a new temp, so update tenv here as well
+        bindDestToValue transVal tc' tenv'
 
     let destIsPtr := Option.isSome ptrOpt
 
