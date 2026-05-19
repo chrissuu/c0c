@@ -63,7 +63,10 @@ deriving Inhabited
 mutual
 inductive Expr where
   | var   (name : String)
-  | intLit (val : Int32)
+
+  -- this is an Int here which gets lowered to Int32 in downstream
+  -- the typechecker enforces the bounds of representable I32 range
+  | intLit (val : Int)
   | binop (op : BinOp) (lhs : MarkedExpr) (rhs : MarkedExpr)
   | unop (op : UnOp) (operand : MarkedExpr)
   | ternary (test : MarkedExpr) (thenVal : MarkedExpr) (elseVal : MarkedExpr)

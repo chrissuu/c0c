@@ -113,13 +113,13 @@ def hexStringToNat (s : String) : Nat :=
 
 def parseHexLit : P MarkedExpr :=
   satisfyKind (fun
-    | .hexLit s => some (mkExpr (.intLit (Int32.ofNat (hexStringToNat s))))
+    | .hexLit s => some (mkExpr (.intLit (Int.ofNat (hexStringToNat s))))
     | _ => none
   )
 
 def parseIntLit : P MarkedExpr :=
   satisfyKind (fun
-    | .intLit n => some (mkExpr (.intLit (Int32.ofInt n)))
+    | .intLit n => some (mkExpr (.intLit n))
     | _ => none)
 
 def parseBoolLit : P MarkedExpr :=

@@ -66,7 +66,7 @@ partial def translateExpr
       let (temp, tc') := Temp.bumpAndCreate tc
       ([], .temp temp, env.insert name temp, tc', lc)
 
-  | .intLit val => ([], .const .int val, env, tc, lc)
+  | .intLit val => ([], .const .int (Int32.ofInt val), env, tc, lc)
 
   | .binop op lhs rhs =>
     let (tempRes, tc') := Temp.bumpAndCreate tc

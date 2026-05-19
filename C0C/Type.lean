@@ -32,6 +32,19 @@ abbrev VEnv := Std.HashMap String VarInfo
 def insertVEnv (venv : VEnv) (name : String) (varType : Tau) : VEnv :=
   venv.insert name { name := name, varType := varType }
 
+def minInt32 : Int := -2147483648
+
+def maxInt32 : Int := -1 * minInt32
+
+def intLitInRange (n : Int) : Bool :=
+  minInt32 <= n && n <= maxInt32
+
+def tcIntLitRange (n : Int) : Except String Unit :=
+  if intLitInRange n then
+    .ok ()
+  else
+    .error s!"integer literal {n} is outside int range"
+
 def tauEq : Tau → Tau → Bool
   | .int, .int => true
   | .char, .char => true
@@ -67,7 +80,9 @@ partial def tcExprType (mexpr : Ast.MarkedExpr) (venv : VEnv) : Except String Ta
     match venv.get? name with
     | some info => .ok info.varType
     | none => .error s!"Used {name} before defined"
-  | .intLit _ => .ok .int
+  | .intLit n =>
+    let _ ← tcIntLitRange n
+    .ok .int
   | .trueLit
   | .falseLit => .ok .bool
   | .charLit _ => .ok .char
@@ -125,7 +140,8 @@ partial def tcMExpr (mexpr : Ast.MarkedExpr) (venv : VEnv) : Except String Unit 
   | .length arrayLike =>
     tcMExpr arrayLike venv
 
-  | .intLit _
+  | .intLit n =>
+    tcIntLitRange n
   | .trueLit
   | .falseLit
   | .charLit _

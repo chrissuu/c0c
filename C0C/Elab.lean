@@ -71,7 +71,10 @@ partial def elabMExpr (mexp : MarkedExpr) :=
       else mkElabExpr (.unop .bitNot (elabMExpr reducedMexp)) mexp.span
 
       -- parity collapsing for this is probably not safe to do, so for now ignore parity collapsing
-    | .negative => mkElabExpr (.binop .sub (mkElabExpr (.intLit 0) mexp.span) (elabMExpr mexp')) mexp.span
+    | .negative =>
+      match mexp'.node with
+      | .intLit n => mkElabExpr (.intLit (-n)) mexp.span
+      | _ => mkElabExpr (.binop .sub (mkElabExpr (.intLit 0) mexp.span) (elabMExpr mexp')) mexp.span
 
   | .ternary test thenBranch elseBranch =>
     mkElabExpr (.ternary (elabMExpr test) (elabMExpr thenBranch) (elabMExpr elseBranch)) mexp.span
