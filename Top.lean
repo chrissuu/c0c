@@ -22,6 +22,7 @@ structure CliConfig where
   unsafeMode    : Bool := false
   dumpTokens    : Bool := false
   dumpAst       : Bool := false
+  dumpElab      : Bool := false
   dumpTree      : Bool := false
   dumpIrRaw     : Bool := false
 
@@ -29,7 +30,7 @@ private def usage : String :=
   String.intercalate "\n"
     [ "usage: bin/c0ll [-Olevel] [--emit=option] [-l header.h0] [--unsafe] infile.lN"
     , "       bin/c0ll -t infile.lN"
-    , "       [--dump-tokens] [--dump-ast] [--dump-tree] [--dump-ir-raw]"
+    , "       [--dump-tokens] [--dump-ast] [--dump-elab] [--dump-tree] [--dump-ir-raw]"
     ]
 
 private def parseNatOrZero (s : String) : Nat :=
@@ -50,6 +51,7 @@ private def parseArgs : List String → CliConfig → Except String CliConfig
   | "--unsafe" :: rest, cfg => parseArgs rest { cfg with unsafeMode := true }
   | "--dump-tokens" :: rest, cfg => parseArgs rest { cfg with dumpTokens := true }
   | "--dump-ast" :: rest, cfg => parseArgs rest { cfg with dumpAst := true }
+  | "--dump-elab" :: rest, cfg => parseArgs rest { cfg with dumpElab := true }
   | "--dump-tree" :: rest, cfg => parseArgs rest { cfg with dumpTree := true }
   | "--dump-ir-raw" :: rest, cfg => parseArgs rest { cfg with dumpIrRaw := true }
   | "-l" :: lib :: rest, cfg => parseArgs rest { cfg with libs := cfg.libs.concat lib }
@@ -91,11 +93,13 @@ private def runFrontend (cfg : CliConfig) (infile : String) : IO (Except String 
       match parsed with
       | .error err => pure (.error err)
       | .ok program =>
+          if cfg.dumpAst then
+            IO.println (C0Boole.Ast.Print.ppProgram program)
           let elabbed := C0Boole.Elab.elabProgram program
           match elabbed with
           | .error err => pure (.error err)
           | .ok elabbedProgram =>
-              if cfg.dumpAst then
+              if cfg.dumpElab then
                 IO.println (C0Boole.Ast.Print.ppProgram elabbedProgram)
               match C0Boole.Typechecker.tc elabbedProgram with
               | .error err => pure (.error err)
