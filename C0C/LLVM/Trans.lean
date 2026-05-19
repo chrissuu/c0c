@@ -1,15 +1,15 @@
-import C0Boole.Ast
-import C0Boole.LLVM.Tree
-import C0Boole.Utils.Label
-import C0Boole.Utils.Temp
+import C0C.Ast
+import C0C.LLVM.Tree
+import C0C.Utils.Label
+import C0C.Utils.Temp
 
 import Std.Data.HashMap
 
-namespace C0Boole.LLVM.Tree.Trans
-open C0Boole.Ast
-open C0Boole.LLVM.Tree
-open C0Boole.Utils.Label
-open C0Boole.Utils.Temp
+namespace C0C.LLVM.Tree.Trans
+open C0C.Ast
+open C0C.LLVM.Tree
+open C0C.Utils.Label
+open C0C.Utils.Temp
 
 abbrev TempEnv := Std.HashMap String Temp
 
@@ -281,4 +281,4 @@ def translateGdecl (gdecl : Ast.GDecl) : Tree.FunctionDef :=
 def translate (program : Ast.Program) : Tree.Program :=
   List.map translateGdecl program
 
-end C0Boole.LLVM.Tree.Trans
+end C0C.LLVM.Tree.Trans

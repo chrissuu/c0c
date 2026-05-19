@@ -5,13 +5,13 @@ See C0 reference manual here: https://c0.cs.cmu.edu/docs/c0-reference.pdf
 
 Author: Chris Su <chrjs@cmu.edu>
 -/
-import C0Boole.Utils.Temp
-import C0Boole.Utils.Label
+import C0C.Utils.Temp
+import C0C.Utils.Label
 
-namespace C0Boole.LLVM.Tree
+namespace C0C.LLVM.Tree
 
-open C0Boole.Utils.Temp
-open C0Boole.Utils.Label
+open C0C.Utils.Temp
+open C0C.Utils.Label
 
 -- TODO: maybe consider deduplicating this definition against AST.BinOp?
 inductive BinOp where
@@ -170,4 +170,4 @@ instance : ToString Command where
 instance : ToString Program where
   toString := Print.ppProgram
 
-end C0Boole.LLVM.Tree
+end C0C.LLVM.Tree

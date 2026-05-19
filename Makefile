@@ -1,7 +1,7 @@
-c0ll: bin
-	lake build c0ll
-	cp .lake/build/bin/c0ll bin/c0ll
-	chmod +x bin/c0ll
+c0c: bin
+	lake build c0c
+	cp .lake/build/bin/c0c bin/c0c
+	chmod +x bin/c0c
 
 bin:
 	mkdir -p bin
@@ -11,6 +11,6 @@ clean:
 	lake clean
 
 nocache:
-	lake build --no-cache c0ll
-	cp .lake/build/bin/c0ll bin/c0ll
-	chmod +x bin/c0ll
+	lake build --no-cache c0c
+	cp .lake/build/bin/c0c bin/c0c
+	chmod +x bin/c0c

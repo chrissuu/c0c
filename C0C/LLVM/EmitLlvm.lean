@@ -1,10 +1,10 @@
-import C0Boole.Ast
-import C0Boole.LLVM.IR
-open C0Boole
-open C0Boole.Ast
-open C0Boole.LLVM.IR
+import C0C.Ast
+import C0C.LLVM.IR
+open C0C
+open C0C.Ast
+open C0C.LLVM.IR
 
-namespace C0Boole.LLVM.EmitLlvm
+namespace C0C.LLVM.EmitLlvm
 
 def emitTau : IR.Tau → String
   | .i1 => "i1"
@@ -124,4 +124,4 @@ def emit (program : IR.Program) (fileName : String): IO Unit :=
   let rawProgram := "\n\n".intercalate (List.map emitFdefn program)
   IO.FS.writeFile fileName rawProgram
 
-end C0Boole.LLVM.EmitLlvm
+end C0C.LLVM.EmitLlvm

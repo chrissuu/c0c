@@ -1,16 +1,16 @@
-import C0Boole.LLVM.Tree
-import C0Boole.LLVM.IR
-import C0Boole.Utils.Temp
-import C0Boole.Utils.Label
+import C0C.LLVM.Tree
+import C0C.LLVM.IR
+import C0C.Utils.Temp
+import C0C.Utils.Label
 import Std.Data.HashMap
 
-open C0Boole.LLVM.Tree
-open C0Boole.LLVM.IR
-open C0Boole.Utils.Temp
-open C0Boole.Utils.Label
+open C0C.LLVM.Tree
+open C0C.LLVM.IR
+open C0C.Utils.Temp
+open C0C.Utils.Label
 open Std.HashMap
 
-namespace C0Boole.LLVM.Codegen
+namespace C0C.LLVM.Codegen
 
 structure FunctionInfo where
   retTau : IR.Tau
@@ -348,4 +348,4 @@ def translate (program : Tree.Program) : IR.Program :=
 
   transProgram
 
-end C0Boole.LLVM.Codegen
+end C0C.LLVM.Codegen

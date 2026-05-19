@@ -6,7 +6,7 @@ Lean4 command line parser library.
 
 Author: Chris Su <chrjs@cmu.edu>
 -/
-import C0Boole
+import C0C
 
 inductive EmitTarget where
   | exe
@@ -28,8 +28,8 @@ structure CliConfig where
 
 private def usage : String :=
   String.intercalate "\n"
-    [ "usage: bin/c0ll [-Olevel] [--emit=option] [-l header.h0] [--unsafe] infile.lN"
-    , "       bin/c0ll -t infile.lN"
+    [ "usage: bin/c0c [-Olevel] [--emit=option] [-l header.h0] [--unsafe] infile.lN"
+    , "       bin/c0c -t infile.lN"
     , "       [--dump-tokens] [--dump-ast] [--dump-elab] [--dump-tree] [--dump-ir-raw]"
     ]
 
@@ -82,34 +82,34 @@ private def parseArgs : List String → CliConfig → Except String CliConfig
         | none => parseArgs rest { cfg with infile := some arg }
         | some _ => .error s!"multiple input files provided: {arg}"
 
-private def runFrontend (cfg : CliConfig) (infile : String) : IO (Except String C0Boole.LLVM.IR.Program) := do
+private def runFrontend (cfg : CliConfig) (infile : String) : IO (Except String C0C.LLVM.IR.Program) := do
   let source ← IO.FS.readFile infile
-  match C0Boole.Lexer.munch infile source with
+  match C0C.Lexer.munch infile source with
   | .error err => pure (.error err)
   | .ok tokens =>
       if cfg.dumpTokens then
-        IO.println (C0Boole.Token.Print.ppTokens tokens)
-      let parsed := C0Boole.Parse.parseProgramFromTokens tokens
+        IO.println (C0C.Token.Print.ppTokens tokens)
+      let parsed := C0C.Parse.parseProgramFromTokens tokens
       match parsed with
       | .error err => pure (.error err)
       | .ok program =>
           if cfg.dumpAst then
-            IO.println (C0Boole.Ast.Print.ppProgram program)
-          let elabbed := C0Boole.Elab.elabProgram program
+            IO.println (C0C.Ast.Print.ppProgram program)
+          let elabbed := C0C.Elab.elabProgram program
           match elabbed with
           | .error err => pure (.error err)
           | .ok elabbedProgram =>
               if cfg.dumpElab then
-                IO.println (C0Boole.Ast.Print.ppProgram elabbedProgram)
-              match C0Boole.Typechecker.tc elabbedProgram with
+                IO.println (C0C.Ast.Print.ppProgram elabbedProgram)
+              match C0C.Typechecker.tc elabbedProgram with
               | .error err => pure (.error err)
               | .ok _ =>
-                  let treeProgram := C0Boole.LLVM.Tree.Trans.translate elabbedProgram
+                  let treeProgram := C0C.LLVM.Tree.Trans.translate elabbedProgram
                   if cfg.dumpTree then
-                    IO.println (C0Boole.LLVM.Tree.Print.ppProgram treeProgram)
-                  let llvmIR := C0Boole.LLVM.Codegen.translate treeProgram
+                    IO.println (C0C.LLVM.Tree.Print.ppProgram treeProgram)
+                  let llvmIR := C0C.LLVM.Codegen.translate treeProgram
                   if cfg.dumpIrRaw then
-                    IO.println (C0Boole.LLVM.IR.Print.ppProgramRaw llvmIR)
+                    IO.println (C0C.LLVM.IR.Print.ppProgramRaw llvmIR)
                   pure (.ok llvmIR)
 
 def main (args : List String) : IO UInt32 := do
@@ -137,7 +137,7 @@ def main (args : List String) : IO UInt32 := do
       else
         match cfg.emit with
         | .llvm =>
-            C0Boole.LLVM.EmitLlvm.emit llvmIR (infile ++ ".ll")
+            C0C.LLVM.EmitLlvm.emit llvmIR (infile ++ ".ll")
         | .exe =>
             let exe := infile ++ ".exe"
             IO.FS.writeFile exe "#!/bin/sh\necho 0\n"

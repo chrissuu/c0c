@@ -1,10 +1,10 @@
-import C0Boole.Ast
+import C0C.Ast
 import Std.Data.HashMap
 
-open C0Boole.Ast
+open C0C.Ast
 open Std.HashMap
 
-namespace C0Boole.Typechecker
+namespace C0C.Typechecker
 structure FnInfo where
   retType : Tau
   fname : String
@@ -319,4 +319,4 @@ def tc (program : Ast.Program) : Except String Unit := do
     let _ ← tcControlFlow gdecl {}
     .ok ())
 
-end C0Boole.Typechecker
+end C0C.Typechecker
