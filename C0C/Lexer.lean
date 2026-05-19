@@ -11,15 +11,15 @@ to the lexer library.
 Author: Chris Su <chrjs@cmu.edu>
 -/
 import Std
-import C0Boole.Token
-import C0Boole.Utils.SrcSpan
+import C0C.Token
+import C0C.Utils.SrcSpan
 
-namespace C0Boole.Lexer
+namespace C0C.Lexer
 
-open C0Boole.Utils.SrcSpan
+open C0C.Utils.SrcSpan
 
-abbrev TokenKind := C0Boole.Token.TokenKind
-abbrev Token := C0Boole.Token.Token
+abbrev TokenKind := C0C.Token.TokenKind
+abbrev Token := C0C.Token.Token
 
 def tokenKindOptionOfString : String → Option TokenKind
   -- Static lexemes only. Dynamic lexemes (identifiers, literals) return `none`.
@@ -221,27 +221,31 @@ def matchCharLit (s : String.Slice) (sliceLength : Nat) : Option String.Slice :=
       else if close.toString != "'" then none
       else some (s.take 3)
 
-/-- Matches regular comments only:
-`// ...` until first `\n` or `\r`, and `/* ... */` (possibly multiline).
-Annotation forms (`//@ ...` and `/*@ ... @*/`) are intentionally excluded. -/
+partial def nestedBlockCommentLength : List Char → Nat → Nat → Option Nat
+  | [], _, _ => none
+  | '/' :: '*' :: rest, depth, consumed =>
+      nestedBlockCommentLength rest (depth + 1) (consumed + 2)
+  | '*' :: '/' :: rest, depth, consumed =>
+      if depth == 1 then
+        some (consumed + 2)
+      else
+        nestedBlockCommentLength rest (depth - 1) (consumed + 2)
+  | _ :: rest, depth, consumed =>
+      nestedBlockCommentLength rest depth (consumed + 1)
+
+/-- Matches comments:
+`// ...` until first `\n`, and nested `/* ... */` block comments. -/
 def matchComment (s : String.Slice) (_ : Nat) : Option String.Slice :=
-  if s.startsWith "//@" then
-    none
-  else if s.startsWith "//" then
+  if s.startsWith "//" then
     let body := s.drop 2
-    let commentBody := body.takeWhile (fun c => c != '\n' && c != '\r')
+    let commentBody := body.takeWhile (fun c => c != '\n')
     let consumed := 2 + commentBody.toString.length
     some (s.take consumed)
-  else if s.startsWith "/*@" then
-    none
   else if s.startsWith "/*" then
-    match (s.drop 2).find? "*/" with
-    | none => none
-    | some endPos =>
-      let body := s.drop 2
-      let bodyStr := body.extract body.startPos endPos
-      let consumed := 2 + bodyStr.length + 2
+    match nestedBlockCommentLength (s.drop 2).toString.toList 1 2 with
+    | some consumed =>
       some (s.take consumed)
+    | none => none
   else
     none
 
@@ -363,4 +367,4 @@ partial def munch (fileName : String) (body : String) : Except String (List Toke
               .error s!"lexical error at {fileName}:{line}:{col}: malformed token `{matched.toString}`"
   go body.toSlice 1 1 []
 
-end C0Boole.Lexer
+end C0C.Lexer

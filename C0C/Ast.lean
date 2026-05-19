@@ -5,11 +5,11 @@ See C0 reference manual here: https://c0.cs.cmu.edu/docs/c0-reference.pdf
 
 Author: Chris Su <chrjs@cmu.edu>
 -/
-import C0Boole.Utils.SrcSpan
+import C0C.Utils.SrcSpan
 
-open C0Boole.Utils.SrcSpan
+open C0C.Utils.SrcSpan
 
-namespace C0Boole.Ast
+namespace C0C.Ast
 
 inductive AssignOp where
   | assign     -- assignment
@@ -63,7 +63,10 @@ deriving Inhabited
 mutual
 inductive Expr where
   | var   (name : String)
-  | intLit (val : Int32)
+
+  -- this is an Int here which gets lowered to Int32 in downstream
+  -- the typechecker enforces the bounds of representable I32 range
+  | intLit (val : Int)
   | binop (op : BinOp) (lhs : MarkedExpr) (rhs : MarkedExpr)
   | unop (op : UnOp) (operand : MarkedExpr)
   | ternary (test : MarkedExpr) (thenVal : MarkedExpr) (elseVal : MarkedExpr)
@@ -369,4 +372,4 @@ end Print
 instance : ToString Program where
   toString := Print.ppProgram
 
-end C0Boole.Ast
+end C0C.Ast

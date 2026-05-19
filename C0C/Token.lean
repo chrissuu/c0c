@@ -1,8 +1,8 @@
-import C0Boole.Utils.SrcSpan
+import C0C.Utils.SrcSpan
 
-open C0Boole.Utils.SrcSpan
+open C0C.Utils.SrcSpan
 
-namespace C0Boole.Token
+namespace C0C.Token
 
 inductive TokenKind where
   | ident (name : String)
@@ -205,4 +205,4 @@ instance : ToString TokenKind where
 instance : ToString Token where
   toString := Print.ppToken
 
-end C0Boole.Token
+end C0C.Token

@@ -1,4 +1,4 @@
-namespace C0Boole.Utils.Label
+namespace C0C.Utils.Label
 
 structure Label where
   name : String
@@ -23,4 +23,4 @@ def Label.bumpAndCreateNamed (lc : LabelCounter) (name : String) : Label × Labe
   let lc' := LabelCounter.bump lc
   ({ name := s!"L{lc'}_{name}" }, lc')
 
-end C0Boole.Utils.Label
+end C0C.Utils.Label

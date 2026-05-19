@@ -1,12 +1,12 @@
-name = "c0-boole"
+name = "c0c"
 version = "0.1.0"
-defaultTargets = ["c0ll"]
+defaultTargets = ["c0c"]
 
 [[lean_lib]]
-name = "C0Boole"
+name = "C0C"
 
 [[lean_exe]]
-name = "c0ll"
+name = "c0c"
 root = "Top"
 
 [[require]]

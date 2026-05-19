@@ -1,15 +1,15 @@
-import C0Boole.Ast
-import C0Boole.LLVM.Tree
-import C0Boole.Utils.Label
-import C0Boole.Utils.Temp
+import C0C.Ast
+import C0C.LLVM.Tree
+import C0C.Utils.Label
+import C0C.Utils.Temp
 
 import Std.Data.HashMap
 
-namespace C0Boole.LLVM.Tree.Trans
-open C0Boole.Ast
-open C0Boole.LLVM.Tree
-open C0Boole.Utils.Label
-open C0Boole.Utils.Temp
+namespace C0C.LLVM.Tree.Trans
+open C0C.Ast
+open C0C.LLVM.Tree
+open C0C.Utils.Label
+open C0C.Utils.Temp
 
 abbrev TempEnv := Std.HashMap String Temp
 
@@ -66,7 +66,7 @@ partial def translateExpr
       let (temp, tc') := Temp.bumpAndCreate tc
       ([], .temp temp, env.insert name temp, tc', lc)
 
-  | .intLit val => ([], .const .int val, env, tc, lc)
+  | .intLit val => ([], .const .int (Int32.ofInt val), env, tc, lc)
 
   | .binop op lhs rhs =>
     let (tempRes, tc') := Temp.bumpAndCreate tc
@@ -166,7 +166,7 @@ partial def translateStm
     ++ cmdsThen
     ++ [.goto labelDone]
     ++ [.label labelElse]
-    -- TODO: if this is empty, consider not emitting
+    -- TODO: if this is empty, consider not emitting to remove redundant labels
     ++ cmdsElse
     ++ [.goto labelDone]
     ++ [.label labelDone]
@@ -218,7 +218,7 @@ partial def translateStm
   | .declare varName _ value =>
     let (temp, tc') := Temp.bumpAndCreate tc
     let (cmdsValue, env', tc'', lc') := translateStm value (env.insert varName temp) tc' lc
-    (cmdsValue, env'.insert varName temp, tc'', lc')
+    (cmdsValue, env'.erase varName, tc'', lc')
 
   | .defn varName tau =>
     let (temp, tc') := Temp.bumpAndCreate tc
@@ -281,4 +281,4 @@ def translateGdecl (gdecl : Ast.GDecl) : Tree.FunctionDef :=
 def translate (program : Ast.Program) : Tree.Program :=
   List.map translateGdecl program
 
-end C0Boole.LLVM.Tree.Trans
+end C0C.LLVM.Tree.Trans

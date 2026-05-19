@@ -21,17 +21,17 @@ AST.
 Author: Chris Su <chrjs@cmu.edu>
 -/
 
-import C0Boole.Ast
-import C0Boole.Utils.SrcSpan
+import C0C.Ast
+import C0C.Utils.SrcSpan
 import Std.Data.HashMap
 
-open C0Boole.Ast
-open C0Boole.Utils.SrcSpan
+open C0C.Ast
+open C0C.Utils.SrcSpan
 open Std.HashMap
 
 abbrev Env := Std.HashMap String Tau
 
-namespace C0Boole.Elab
+namespace C0C.Elab
 partial def countUnopOfType (acc : Nat) (type : UnOp) (mexp : MarkedExpr) :=
   match mexp.node with
   | .unop type' mexp' => if type = type' then countUnopOfType (acc + 1) type mexp' else (acc, mexp)
@@ -71,7 +71,10 @@ partial def elabMExpr (mexp : MarkedExpr) :=
       else mkElabExpr (.unop .bitNot (elabMExpr reducedMexp)) mexp.span
 
       -- parity collapsing for this is probably not safe to do, so for now ignore parity collapsing
-    | .negative => mkElabExpr (.binop .sub (mkElabExpr (.intLit 0) mexp.span) (elabMExpr mexp')) mexp.span
+    | .negative =>
+      match mexp'.node with
+      | .intLit n => mkElabExpr (.intLit (-n)) mexp.span
+      | _ => mkElabExpr (.binop .sub (mkElabExpr (.intLit 0) mexp.span) (elabMExpr mexp')) mexp.span
 
   | .ternary test thenBranch elseBranch =>
     mkElabExpr (.ternary (elabMExpr test) (elabMExpr thenBranch) (elabMExpr elseBranch)) mexp.span
@@ -141,8 +144,13 @@ partial def elabMStm (env : Env) (mstm : MarkedStm) : Except String MarkedStm :=
     let forSpan := spanCoverOpt init.span whileSpan
     let desugaredBody := mkElabStm (.seq body update) bodySpan
     let desugaredWhile := mkElabStm (.whileLit test desugaredBody) whileSpan
-    let desugaredFor := mkElabStm (.seq init desugaredWhile) forSpan
-    elabMStm env desugaredFor
+    match init.node with
+    | .declare varName tau initBody =>
+      let scopedFor := mkElabStm (.declare varName tau (mkElabStm (.seq initBody desugaredWhile) forSpan)) forSpan
+      elabMStm env scopedFor
+    | _ =>
+      let desugaredFor := mkElabStm (.seq init desugaredWhile) forSpan
+      elabMStm env desugaredFor
   | .expr e => .ok (mkElabStm (.expr (elabMExpr e)) mstm.span)
   | .assert test => .ok (mkElabStm (.assert (elabMExpr test)) mstm.span)
   | .error e => .ok (mkElabStm (.error (elabMExpr e)) mstm.span)
@@ -203,4 +211,4 @@ def elabProgram (program : Ast.Program) : Except String Ast.Program :=
     .ok (List.reverse elabbedProgram)
   | .error err => .error err
 
-end C0Boole.Elab
+end C0C.Elab

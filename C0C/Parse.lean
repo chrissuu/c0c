@@ -12,18 +12,18 @@ Author: Chris Su <chrjs@cmu.edu>
 -/
 
 import Parser
-import C0Boole.Ast
-import C0Boole.Lexer
-import C0Boole.Utils.SrcSpan
+import C0C.Ast
+import C0C.Lexer
+import C0C.Utils.SrcSpan
 
-namespace C0Boole.Parse
+namespace C0C.Parse
 
 open Parser
-open C0Boole
-open C0Boole.Ast
-open C0Boole.Utils.SrcSpan
+open C0C
+open C0C.Ast
+open C0C.Utils.SrcSpan
 
-abbrev Tok := C0Boole.Lexer.Token
+abbrev Tok := C0C.Lexer.Token
 abbrev TokStream := Parser.Stream.OfList Tok
 abbrev P := SimpleParser TokStream Tok
 
@@ -108,18 +108,27 @@ def hexCharToNat (c : Char) : Nat :=
   else 0
 
 def hexStringToNat (s : String) : Nat :=
-  let s := if s.startsWith "0x" then s.drop 2 else s
+  let s := if s.startsWith "0x" || s.startsWith "0X" then s.drop 2 else s
   s.foldl (fun acc c => acc * 16 + hexCharToNat c) 0
+
+def intOfHexLit (s : String) : Int :=
+  let n := hexStringToNat s
+  if n > 4294967295 then
+    Int.ofNat n
+  else if n < 2147483648 then
+    Int.ofNat n
+  else
+    Int.ofNat n - 4294967296
 
 def parseHexLit : P MarkedExpr :=
   satisfyKind (fun
-    | .hexLit s => some (mkExpr (.intLit (Int32.ofNat (hexStringToNat s))))
+    | .hexLit s => some (mkExpr (.intLit (intOfHexLit s)))
     | _ => none
   )
 
 def parseIntLit : P MarkedExpr :=
   satisfyKind (fun
-    | .intLit n => some (mkExpr (.intLit (Int32.ofInt n)))
+    | .intLit n => some (mkExpr (.intLit n))
     | _ => none)
 
 def parseBoolLit : P MarkedExpr :=
@@ -328,29 +337,37 @@ partial def parseExpr : P MarkedExpr :=
 
 end
 
+partial def parseLValueName : P String :=
+  parseIdent
+  <|>
+  (do
+    let _ ← expectKindTokMsg (only .lParen) "expected '('"
+    let name ← parseLValueName
+    let _ ← expectKindTokMsg (only .rParen) "expected ')'"
+    pure name)
+
+def parseLValue : P (String × Option SrcSpan) :=
+  withConsumedSpan parseLValueName
+
 def parseIncr : P MarkedStm := do
-  -- TODO: must change this to lvalue
-  let idTok ← expectKindTokMsg (fun | .ident _ => true | _ => false) "expected identifier"
+  let (varName, varSpan) ← parseLValue
   let incrTok ← expectKindTokMsg (only .incr) "expected '++' after identifier"
-  let varName :=
-    match idTok.kind with
-      | .ident name => name
-      | _ => ""
 
   pure { node := .incr varName
-       , span := some (spanFromTokenBounds idTok incrTok)
+       , span :=
+          match varSpan with
+          | some sp => some { startLoc := sp.startLoc, endLoc := incrTok.span.endLoc, fileName := sp.fileName }
+          | none => some incrTok.span
        }
 
 def parseDecr : P MarkedStm := do
-  -- TODO: must change this to lvalue
-  let idTok ← expectKindTokMsg (fun | .ident _ => true | _ => false) "expected identifier"
+  let (varName, varSpan) ← parseLValue
   let decrTok ← expectKindTokMsg (only .decr) "expected '++' after identifier"
-  let varName :=
-    match idTok.kind with
-      | .ident name => name
-      | _ => ""
   pure { node := .decr varName
-       , span := some (spanFromTokenBounds idTok decrTok)
+       , span :=
+          match varSpan with
+          | some sp => some { startLoc := sp.startLoc, endLoc := decrTok.span.endLoc, fileName := sp.fileName }
+          | none => some decrTok.span
        }
 
 def parseReturnStm : P MarkedStm := do
@@ -362,17 +379,12 @@ def parseReturnStm : P MarkedStm := do
        }
 
 def parseAssignCore : P MarkedStm := do
-  let idTok ← expectKindTokMsg (fun | .ident _ => true | _ => false) "expected identifier"
+  let (varName, varSpan) ← parseLValue
   let op ← parseAssignOp
   let rhs ← parseExpr
-  let varName :=
-    match idTok.kind with
-    | .ident name => name
-    | _ => ""
-  let span := some idTok.span
   match op with
-  | .assign => pure { node := .assign varName rhs, span := span }
-  | _ => pure { node := .asop varName op rhs, span := span }
+  | .assign => pure { node := .assign varName rhs, span := varSpan }
+  | _ => pure { node := .asop varName op rhs, span := varSpan }
 
 def parseExprCore : P MarkedStm := do
   let (e, exprSpan) ← withConsumedSpan parseExpr
@@ -416,7 +428,7 @@ def parseVarDeclCore : P MarkedStm := do
     let initStm : MarkedStm := { node := .assign varName initExpr, span := initExpr.span }
     pure { node := .declare varName tau initStm, span := some tauTok.span })
   <|>
-  pure { node := .defn varName tau, span := some tauTok.span }
+  pure { node := .declare varName tau { node := .nop, span := none }, span := some tauTok.span }
 
 def parseSimpleCore : P MarkedStm :=
   withErrorMessage "while parsing simple statement" <|
@@ -441,6 +453,18 @@ def seqOf (stms : List MarkedStm) : MarkedStm :=
   | [] => { node := .nop, span := none }
   | s :: rest =>
     rest.foldl (fun acc nxt => { node := .seq acc nxt, span := none }) s
+
+def foldStms (stms : List MarkedStm) (span : Option SrcSpan := none) : MarkedStm :=
+  match stms with
+  | [] => { node := .nop, span := span }
+  | [s] => s
+  | s :: rest =>
+    let restStm := foldStms rest span
+    match s.node with
+    | .declare varName varType body =>
+      { node := .declare varName varType { node := .seq body restStm, span := span }, span := s.span }
+    | _ =>
+      { node := .seq s restStm, span := span }
 
 mutual
 
@@ -491,8 +515,9 @@ partial def parseBlockStm : P MarkedStm := do
   let lTok ← expectKindTokMsg (only .lBrace) "expected '{'"
   let bodyRev ← Parser.foldl (fun acc stm => stm :: acc) [] parseStm
   let rTok ← expectKindTokMsg (only .rBrace) "expected '}'"
-  let body := seqOf bodyRev.reverse
-  pure { node := body.node, span := some (spanFromTokenBounds lTok rTok) }
+  let span := some (spanFromTokenBounds lTok rTok)
+  let body := foldStms bodyRev.reverse span
+  pure { node := .seq { node := .nop, span := span } body, span := span }
 
 partial def parseIfStm : P MarkedStm := do
   let ifTok ← expectKindTokMsg (only .kwIf) "expected 'if'"
@@ -614,7 +639,7 @@ def parseFdefn : P GDecl := do
   let _ ← expectKindTokMsg (only .lBrace) "expected '{' to start function body"
   let stms ← Parser.foldl (fun acc stm => stm :: acc) [] parseStm
   let _ ← expectKindTokMsg (only .rBrace) "expected '}' to close function body"
-  pure (.fdefn tau fname params (List.reverse stms) annotations)
+  pure (.fdefn tau fname params [foldStms (List.reverse stms)] annotations)
 
 def parseGdecl : P GDecl :=
   withErrorMessage "while parsing global declaration" <|
