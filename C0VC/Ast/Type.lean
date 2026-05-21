@@ -131,9 +131,6 @@ def binopType : BinOp → Tau
 def mkTExpr (node : C0VC.TypedAst.Expr) (tau : Tau) : C0VC.TypedAst.TypedExpr :=
   { node := node, tau := tau }
 
-def mkTStm (node : C0VC.TypedAst.Stm) : C0VC.TypedAst.TypedStm :=
-  { node := node }
-
 mutual
 partial def tcExpr (fenv : FEnv) (resultType : Option Tau) (mexpr : MarkedExpr) (venv : VEnv) :
     Except String C0VC.TypedAst.TypedExpr := do
@@ -206,30 +203,30 @@ def tcExprHasType (fenv : FEnv) (resultType : Option Tau) (mexpr : MarkedExpr) (
     .error s!"{ctx} must have type {ppTau expected}"
 
 partial def tcAnno (fenv : FEnv) (resultType : Option Tau) (anno : MarkedAnno) (venv : VEnv) :
-    Except String C0VC.TypedAst.TypedAnno := do
+    Except String C0VC.TypedAst.Anno := do
   match anno.node with
   | .requires e =>
     let te ← tcExpr fenv resultType e venv
-    .ok { node := .requires te }
+    .ok (.requires te)
   | .ensures e =>
     let te ← tcExpr fenv resultType e venv
-    .ok { node := .ensures te }
+    .ok (.ensures te)
   | .asserts e =>
     let te ← tcExpr fenv resultType e venv
-    .ok { node := .asserts te }
+    .ok (.asserts te)
   | .loopInvariant e =>
     let te ← tcExpr fenv resultType e venv
-    .ok { node := .loopInvariant te }
+    .ok (.loopInvariant te)
 
 partial def tcMStm (fenv : FEnv) (expectedRet : Tau) (mstm : MarkedStm) (venv : VEnv) :
-    Except String (C0VC.TypedAst.TypedStm × VEnv) := do
+    Except String (C0VC.TypedAst.Stm × VEnv) := do
   match mstm.node with
   | .assign varName val =>
     let varInfo ← tcVarDeclared venv varName
     let tval ← tcExpr fenv none val venv
     if tauEq varInfo.varType tval.tau then
       let venv' ← markVEnvInitialized venv varName
-      .ok (mkTStm (.assign varName tval), venv')
+      .ok (.assign varName tval, venv')
     else
       .error s!"assigning to {varName} an expression of different type"
 
@@ -237,65 +234,65 @@ partial def tcMStm (fenv : FEnv) (expectedRet : Tau) (mstm : MarkedStm) (venv : 
     let ttest ← tcExprHasType fenv none test venv .bool "if condition"
     let (tthen, thenEnv) ← tcMStm fenv expectedRet thenBranch venv
     let (telse, elseEnv) ← tcMStm fenv expectedRet elseBranch venv
-    .ok (mkTStm (.ifLit ttest tthen telse), mergeVEnvAfterBranches venv thenEnv elseEnv)
+    .ok (.ifLit ttest tthen telse, mergeVEnvAfterBranches venv thenEnv elseEnv)
 
   | .whileLit test body =>
     let ttest ← tcExprHasType fenv none test venv .bool "while condition"
     let (tbody, _) ← tcMStm fenv expectedRet body venv
-    .ok (mkTStm (.whileLit ttest tbody), venv)
+    .ok (.whileLit ttest tbody, venv)
 
   | .declare varName varType value =>
     if venv.contains varName then
       .error s!"variable {varName} declared more than once"
     let venv' := insertVEnv venv varName varType false
     let (tvalue, venv'') ← tcMStm fenv expectedRet value venv'
-    .ok (mkTStm (.declare varName varType tvalue), venv''.erase varName)
+    .ok (.declare varName varType tvalue, venv''.erase varName)
 
   | .defn varName varType =>
     if venv.contains varName then
       .error s!"variable {varName} declared more than once"
-    .ok (mkTStm (.defn varName varType), insertVEnv venv varName varType false)
+    .ok (.defn varName varType, insertVEnv venv varName varType false)
 
   | .ret valOpt =>
     match valOpt with
     | some val =>
       let tval ← tcExpr fenv none val venv
       if tauEq tval.tau expectedRet then
-        .ok (mkTStm (.ret (some tval)), initializeAllVEnv venv)
+        .ok (.ret (some tval), initializeAllVEnv venv)
       else
         .error "return type does not match function return type"
     | none =>
       if tauEq expectedRet .void then
-        .ok (mkTStm (.ret none), initializeAllVEnv venv)
+        .ok (.ret none, initializeAllVEnv venv)
       else
         .error "return type does not match function return type"
 
   | .seq first rest =>
     let (tfirst, venv') ← tcMStm fenv expectedRet first venv
     let (trest, venv'') ← tcMStm fenv expectedRet rest venv'
-    .ok (mkTStm (.seq tfirst trest), venv'')
+    .ok (.seq tfirst trest, venv'')
 
   | .expr e =>
     let te ← tcExpr fenv none e venv
-    .ok (mkTStm (.expr te), venv)
+    .ok (.expr te, venv)
 
   | .assert test =>
     let ttest ← tcExprHasType fenv none test venv .bool "assert condition"
-    .ok (mkTStm (.assert ttest), venv)
+    .ok (.assert ttest, venv)
 
   | .error e =>
     let te ← tcExpr fenv none e venv
-    .ok (mkTStm (.error te), venv)
+    .ok (.error te, venv)
 
   | .nop =>
-    .ok (mkTStm .nop, venv)
+    .ok (.nop, venv)
 
   | .annotation a =>
     let ta ← tcAnno fenv (some expectedRet) a venv
-    .ok (mkTStm (.annotation ta), venv)
+    .ok (.annotation ta, venv)
 
-partial def typedStmtGuaranteedReturn (mstm : C0VC.TypedAst.TypedStm) : Bool :=
-  match mstm.node with
+partial def typedStmtGuaranteedReturn (mstm : C0VC.TypedAst.Stm) : Bool :=
+  match mstm with
   | .ret _ => true
   | .seq first rest => typedStmtGuaranteedReturn first || typedStmtGuaranteedReturn rest
   | .ifLit _ thenBranch elseBranch =>
@@ -304,7 +301,7 @@ partial def typedStmtGuaranteedReturn (mstm : C0VC.TypedAst.TypedStm) : Bool :=
   | .whileLit _ body => typedStmtGuaranteedReturn body
   | _ => false
 
-def typedBodyGuaranteedReturn (body : List C0VC.TypedAst.TypedStm) : Bool :=
+def typedBodyGuaranteedReturn (body : List C0VC.TypedAst.Stm) : Bool :=
   body.any typedStmtGuaranteedReturn
 
 def tcGDecl (fenv : FEnv) (fdefn : FunctionDef) : Except String C0VC.TypedAst.FunctionDef := do

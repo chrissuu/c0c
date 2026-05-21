@@ -203,8 +203,7 @@ private def elabParsedProgram (program : Ast.Program) : Except String Ast.Progra
     (m := Except String)
     (λ (progAcc, envAcc, lineNum) gdecl => do
       let (elabbedGdecl, envAcc') ← elabGDecl gdecl envAcc
-      dbg_trace s!"Line {lineNum} is ok!"
-      let isFdefn := match elabbedGdecl with | .fdefn _ _ _ _ _ => true | _ => false
+      let isFdefn := match elabbedGdecl with | .fdefn .. => true | _ => false
       pure (if isFdefn then elabbedGdecl::progAcc else progAcc, envAcc', lineNum + 1))
     ([], {}, 0)
     program with

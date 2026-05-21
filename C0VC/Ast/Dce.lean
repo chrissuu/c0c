@@ -18,8 +18,8 @@ import C0VC.Ast.TypedAst
 
 namespace C0VC.Dce
 
-partial def dceMStm (mstm : C0VC.TypedAst.TypedStm) : C0VC.TypedAst.TypedStm × Bool :=
-  match mstm.node with
+partial def dceMStm (mstm : C0VC.TypedAst.Stm) : C0VC.TypedAst.Stm × Bool :=
+  match mstm with
   | .ret _ => (mstm, true)
   | .seq first rest =>
       let (first', firstReturns) := dceMStm first
@@ -27,20 +27,20 @@ partial def dceMStm (mstm : C0VC.TypedAst.TypedStm) : C0VC.TypedAst.TypedStm × 
         (first', true)
       else
         let (rest', restReturns) := dceMStm rest
-        ({ mstm with node := .seq first' rest' }, restReturns)
+        (.seq first' rest', restReturns)
   | .ifLit test thenBranch elseBranch =>
       let (thenBranch', thenReturns) := dceMStm thenBranch
       let (elseBranch', elseReturns) := dceMStm elseBranch
-      ({ mstm with node := .ifLit test thenBranch' elseBranch' }, thenReturns && elseReturns)
+      (.ifLit test thenBranch' elseBranch', thenReturns && elseReturns)
   | .whileLit test body =>
       let (body', _) := dceMStm body
-      ({ mstm with node := .whileLit test body' }, false)
+      (.whileLit test body', false)
   | .declare varName type value =>
       let (value', valueReturns) := dceMStm value
-      ({ mstm with node := .declare varName type value' }, valueReturns)
+      (.declare varName type value', valueReturns)
   | _ => (mstm, false)
 
-def dceBody (body : List C0VC.TypedAst.TypedStm) : List C0VC.TypedAst.TypedStm :=
+def dceBody (body : List C0VC.TypedAst.Stm) : List C0VC.TypedAst.Stm :=
   match body with
   | [] => []
   | stm :: rest =>

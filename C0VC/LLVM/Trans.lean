@@ -63,12 +63,12 @@ def tauOfBinOp : C0VC.TypedAst.BinOp → Tree.Tau
   | _ => .int
 
 partial def translateExpr
-  (mexpr : C0VC.TypedAst.TypedExpr)
+  (texpr : C0VC.TypedAst.TypedExpr)
   (env : Std.HashMap String Temp)
   (tc : TempCounter)
   (lc : LabelCounter)
   : List Tree.Command × Tree.Expr × TempEnv × TempCounter × LabelCounter :=
-  match mexpr.node with
+  match texpr.node with
   | .var name =>
     match env.get? name with
     | some temp => ([], .temp temp, env, tc, lc)
@@ -113,7 +113,7 @@ partial def translateExpr
     let (cmdsElse, transElse, env''', tc'''', lc'''') := translateExpr elseVal env'' tc''' lc'''
     let (labelDone, lc''''') := Label.bumpAndCreate lc''''
 
-    ([.declare tempRes (translateTau mexpr.tau)]
+    ([.declare tempRes (translateTau texpr.tau)]
     ++ cmdsTest
     ++ [.ite transTest labelThen labelElse]
     ++ [.label labelThen]
@@ -156,12 +156,12 @@ partial def translateExpr
   | .stringLit _ => ([], .const .int 0, env, tc, lc)
 
 partial def translateStm
-  (mstm : C0VC.TypedAst.TypedStm)
+  (mstm : C0VC.TypedAst.Stm)
   (env : Std.HashMap String Temp)
   (tc : TempCounter)
   (lc : LabelCounter)
   : List Tree.Command × TempEnv × TempCounter × LabelCounter :=
-  match mstm.node with
+  match mstm with
   | .assign varName val =>
     let (cmds, expr, env', tc', lc') := translateExpr val env tc lc
     match env.get? varName with
@@ -232,13 +232,13 @@ partial def translateStm
     , tc''
     , lc'')
 
-  -- TODO: weave in type info into TempEnv
   | .declare varName _ value =>
     let (temp, tc') := Temp.bumpAndCreate tc
     let (cmdsValue, env', tc'', lc') := translateStm value (env.insert varName temp) tc' lc
     (cmdsValue, env'.erase varName, tc'', lc')
 
   | .defn varName tau =>
+    dbg_trace "Found a defn, translating!"
     let (temp, tc') := Temp.bumpAndCreate tc
     let defaultVal := defaultValOfTau tau
     ([.move temp defaultVal], env.insert varName temp, tc', lc)

@@ -23,6 +23,10 @@ structure CliConfig where
   dumpTokens    : Bool := false
   dumpAst       : Bool := false
   dumpElab      : Bool := false
+  dumpType      : Bool := false
+  dumpTypeRaw   : Bool := false
+  dumpDce       : Bool := false
+  dumpDceRaw    : Bool := false
   dumpTree      : Bool := false
   dumpIrRaw     : Bool := false
 
@@ -30,7 +34,7 @@ private def usage : String :=
   String.intercalate "\n"
     [ "usage: bin/c0vc [-Olevel] [--emit=option] [-l header.h0] [--unsafe] infile.lN"
     , "       bin/c0vc -t infile.lN"
-    , "       [--dump-tokens] [--dump-ast] [--dump-elab] [--dump-tree] [--dump-ir-raw]"
+    , "       [--dump-tokens] [--dump-ast] [--dump-elab] [--dump-type] [--dump-type-raw] [--dump-dce] [--dump-dce-raw] [--dump-tree] [--dump-ir-raw]"
     ]
 
 private def parseNatOrZero (s : String) : Nat :=
@@ -57,6 +61,10 @@ private def parseArgs : List String → CliConfig → Except String CliConfig
   | "--dump-tokens" :: rest, cfg => parseArgs rest { cfg with dumpTokens := true }
   | "--dump-ast" :: rest, cfg => parseArgs rest { cfg with dumpAst := true }
   | "--dump-elab" :: rest, cfg => parseArgs rest { cfg with dumpElab := true }
+  | "--dump-type" :: rest, cfg => parseArgs rest { cfg with dumpType := true }
+  | "--dump-type-raw" :: rest, cfg => parseArgs rest { cfg with dumpTypeRaw := true }
+  | "--dump-dce" :: rest, cfg => parseArgs rest { cfg with dumpDce := true }
+  | "--dump-dce-raw" :: rest, cfg => parseArgs rest { cfg with dumpDceRaw := true }
   | "--dump-tree" :: rest, cfg => parseArgs rest { cfg with dumpTree := true }
   | "--dump-ir-raw" :: rest, cfg => parseArgs rest { cfg with dumpIrRaw := true }
   | "-l" :: lib :: rest, cfg => parseArgs rest { cfg with libs := cfg.libs.concat lib }
@@ -109,10 +117,18 @@ private def runFrontend (cfg : CliConfig) (infile : String) : IO (Except String 
               match C0VC.Typechecker.tc elabbedAst with
               | .error err => pure (.error err)
               | .ok typedAst =>
+                  if cfg.dumpType then
+                    IO.println (C0VC.TypedAst.Print.ppProgram typedAst)
+                  if cfg.dumpTypeRaw then
+                    IO.println (C0VC.TypedAst.Print.ppProgramRaw typedAst)
                   if cfg.typecheckOnly then
                     pure (.ok none)
                   else
                     let dceProgram := C0VC.Dce.run typedAst
+                    if cfg.dumpDce then
+                      IO.println (C0VC.TypedAst.Print.ppProgram dceProgram)
+                    if cfg.dumpDceRaw then
+                      IO.println (C0VC.TypedAst.Print.ppProgramRaw dceProgram)
                     let treeProgram := C0VC.LLVM.Tree.Trans.translate dceProgram
                     if cfg.dumpTree then
                       IO.println (C0VC.LLVM.Tree.Print.ppProgram treeProgram)

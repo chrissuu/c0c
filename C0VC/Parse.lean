@@ -422,17 +422,15 @@ def parseVarDeclCore : P MarkedStm := do
     | .kwVoid => Tau.void
     | _ => Tau.int
   let varName ← parseIdent
-  (do
-    let _ ← expectKindTokMsg (only .assign) "expected '=' in variable declaration"
-    let initExpr ← parseExpr
-    let initStm : MarkedStm := { node := .assign varName initExpr, span := initExpr.span }
-    pure { node := .declare varName tau initStm, span := some tauTok.span })
-  <|>
-  pure { node := .declare varName tau { node := .nop, span := none }, span := some tauTok.span }
+  let _ ← expectKindTokMsg (only .assign) "expected '=' in variable declaration"
+  let initExpr ← parseExpr
+  let initStm : MarkedStm := { node := .assign varName initExpr, span := initExpr.span }
+  pure { node := .declare varName tau initStm, span := some tauTok.span }
 
 def parseSimpleCore : P MarkedStm :=
   withErrorMessage "while parsing simple statement" <|
     (parseVarDeclCore
+    <|> parseVarDefnCore
     <|> parseAssignCore
     <|> parseIncr
     <|> parseDecr
