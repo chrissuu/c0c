@@ -128,15 +128,15 @@ def binopType : BinOp → Tau
   | .eq
   | .neq => .bool
 
-def mkTExpr (node : C0VC.TypedAst.Expr) (tau : Tau) : C0VC.TypedAst.MarkedExpr :=
+def mkTExpr (node : C0VC.TypedAst.Expr) (tau : Tau) : C0VC.TypedAst.TypedExpr :=
   { node := node, tau := tau }
 
-def mkTStm (node : C0VC.TypedAst.Stm) : C0VC.TypedAst.MarkedStm :=
+def mkTStm (node : C0VC.TypedAst.Stm) : C0VC.TypedAst.TypedStm :=
   { node := node }
 
 mutual
 partial def tcExpr (fenv : FEnv) (resultType : Option Tau) (mexpr : MarkedExpr) (venv : VEnv) :
-    Except String C0VC.TypedAst.MarkedExpr := do
+    Except String C0VC.TypedAst.TypedExpr := do
   match mexpr.node with
   | .var name =>
     let info ← tcVarReadable venv name
@@ -184,7 +184,7 @@ partial def tcExpr (fenv : FEnv) (resultType : Option Tau) (mexpr : MarkedExpr) 
 
 partial def tcCallArgs (fenv : FEnv) (resultType : Option Tau) (fname : String)
     (args : List MarkedExpr) (params : List Param) (venv : VEnv) :
-    Except String (List C0VC.TypedAst.MarkedExpr) := do
+    Except String (List C0VC.TypedAst.TypedExpr) := do
   match args, params with
   | [], [] => .ok []
   | arg :: restArgs, (expected, _) :: restParams =>
@@ -198,7 +198,7 @@ partial def tcCallArgs (fenv : FEnv) (resultType : Option Tau) (fname : String)
 end
 
 def tcExprHasType (fenv : FEnv) (resultType : Option Tau) (mexpr : MarkedExpr) (venv : VEnv)
-    (expected : Tau) (ctx : String) : Except String C0VC.TypedAst.MarkedExpr := do
+    (expected : Tau) (ctx : String) : Except String C0VC.TypedAst.TypedExpr := do
   let actual ← tcExpr fenv resultType mexpr venv
   if tauEq actual.tau expected then
     .ok actual
@@ -206,7 +206,7 @@ def tcExprHasType (fenv : FEnv) (resultType : Option Tau) (mexpr : MarkedExpr) (
     .error s!"{ctx} must have type {ppTau expected}"
 
 partial def tcAnno (fenv : FEnv) (resultType : Option Tau) (anno : MarkedAnno) (venv : VEnv) :
-    Except String C0VC.TypedAst.MarkedAnno := do
+    Except String C0VC.TypedAst.TypedAnno := do
   match anno.node with
   | .requires e =>
     let te ← tcExpr fenv resultType e venv
@@ -222,7 +222,7 @@ partial def tcAnno (fenv : FEnv) (resultType : Option Tau) (anno : MarkedAnno) (
     .ok { node := .loopInvariant te }
 
 partial def tcMStm (fenv : FEnv) (expectedRet : Tau) (mstm : MarkedStm) (venv : VEnv) :
-    Except String (C0VC.TypedAst.MarkedStm × VEnv) := do
+    Except String (C0VC.TypedAst.TypedStm × VEnv) := do
   match mstm.node with
   | .assign varName val =>
     let varInfo ← tcVarDeclared venv varName
@@ -294,7 +294,7 @@ partial def tcMStm (fenv : FEnv) (expectedRet : Tau) (mstm : MarkedStm) (venv : 
     let ta ← tcAnno fenv (some expectedRet) a venv
     .ok (mkTStm (.annotation ta), venv)
 
-partial def typedStmtGuaranteedReturn (mstm : C0VC.TypedAst.MarkedStm) : Bool :=
+partial def typedStmtGuaranteedReturn (mstm : C0VC.TypedAst.TypedStm) : Bool :=
   match mstm.node with
   | .ret _ => true
   | .seq first rest => typedStmtGuaranteedReturn first || typedStmtGuaranteedReturn rest
@@ -304,7 +304,7 @@ partial def typedStmtGuaranteedReturn (mstm : C0VC.TypedAst.MarkedStm) : Bool :=
   | .whileLit _ body => typedStmtGuaranteedReturn body
   | _ => false
 
-def typedBodyGuaranteedReturn (body : List C0VC.TypedAst.MarkedStm) : Bool :=
+def typedBodyGuaranteedReturn (body : List C0VC.TypedAst.TypedStm) : Bool :=
   body.any typedStmtGuaranteedReturn
 
 def tcGDecl (fenv : FEnv) (fdefn : FunctionDef) : Except String C0VC.TypedAst.FunctionDef := do

@@ -63,7 +63,7 @@ def tauOfBinOp : C0VC.TypedAst.BinOp → Tree.Tau
   | _ => .int
 
 partial def translateExpr
-  (mexpr : C0VC.TypedAst.MarkedExpr)
+  (mexpr : C0VC.TypedAst.TypedExpr)
   (env : Std.HashMap String Temp)
   (tc : TempCounter)
   (lc : LabelCounter)
@@ -156,7 +156,7 @@ partial def translateExpr
   | .stringLit _ => ([], .const .int 0, env, tc, lc)
 
 partial def translateStm
-  (mstm : C0VC.TypedAst.MarkedStm)
+  (mstm : C0VC.TypedAst.TypedStm)
   (env : Std.HashMap String Temp)
   (tc : TempCounter)
   (lc : LabelCounter)

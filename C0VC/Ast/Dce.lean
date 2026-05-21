@@ -18,7 +18,7 @@ import C0VC.Ast.TypedAst
 
 namespace C0VC.Dce
 
-partial def dceMStm (mstm : C0VC.TypedAst.MarkedStm) : C0VC.TypedAst.MarkedStm × Bool :=
+partial def dceMStm (mstm : C0VC.TypedAst.TypedStm) : C0VC.TypedAst.TypedStm × Bool :=
   match mstm.node with
   | .ret _ => (mstm, true)
   | .seq first rest =>
@@ -40,7 +40,7 @@ partial def dceMStm (mstm : C0VC.TypedAst.MarkedStm) : C0VC.TypedAst.MarkedStm �
       ({ mstm with node := .declare varName type value' }, valueReturns)
   | _ => (mstm, false)
 
-def dceBody (body : List C0VC.TypedAst.MarkedStm) : List C0VC.TypedAst.MarkedStm :=
+def dceBody (body : List C0VC.TypedAst.TypedStm) : List C0VC.TypedAst.TypedStm :=
   match body with
   | [] => []
   | stm :: rest =>
