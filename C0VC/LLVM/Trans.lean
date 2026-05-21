@@ -94,6 +94,8 @@ partial def translateExpr
       match op with
       | .div => .move tempRes (.runtimeCall .checkedDiv [transLhs, transRhs])
       | .mod => .move tempRes (.runtimeCall .checkedMod [transLhs, transRhs])
+      | .shl => .move tempRes (.runtimeCall .checkedShl [transLhs, transRhs])
+      | .shr => .move tempRes (.runtimeCall .checkedShr [transLhs, transRhs])
       | _ => .move tempRes (.binop (translateBinOp op) transLhs transRhs)
 
     (cmdsLhs ++ cmdsRhs ++ [cmd]

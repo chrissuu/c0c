@@ -1,5 +1,6 @@
 #include <limits.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -37,4 +38,18 @@ int __c0vc_checked_mod(int lhs, int rhs) {
     __c0vc_arith_error("modulo overflow");
   }
   return lhs % rhs;
+}
+
+int __c0vc_checked_shr(int lhs, int rhs) {
+  if (rhs < 0 || rhs >= 32) {
+    __c0vc_arith_error("shift amount out of range");
+  }
+  return lhs >> rhs;
+}
+
+int __c0vc_checked_shl(int lhs, int rhs) {
+  if (rhs < 0 || rhs >= 32) {
+    __c0vc_arith_error("shift amount out of range");
+  }
+  return (int)((uint32_t)lhs << rhs);
 }
