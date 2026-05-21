@@ -12,7 +12,7 @@ Author: Chris Su <chrjs@cmu.edu>
 -/
 
 import Parser
-import C0VC.Ast
+import C0VC.Ast.ParsedAst
 import C0VC.Lexer
 import C0VC.Utils.SrcSpan
 

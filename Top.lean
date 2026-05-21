@@ -44,6 +44,11 @@ private def parseEmit (s : String) : EmitTarget :=
   | "llvm" => .llvm
   | _ => .llvm
 
+private def outputPath (infile : String) (ext : String) : String :=
+  let parts := infile.splitOn "/"
+  let basename := parts.getLast?.getD infile
+  basename ++ ext
+
 private def parseArgs : List String → CliConfig → Except String CliConfig
   | [], cfg => .ok cfg
   | "-t" :: rest, cfg => parseArgs rest { cfg with typecheckOnly := true }
@@ -98,16 +103,16 @@ private def runFrontend (cfg : CliConfig) (infile : String) : IO (Except String 
           let elabbed := C0VC.Elab.elabProgram program
           match elabbed with
           | .error err => pure (.error err)
-          | .ok elabbedProgram =>
+          | .ok elabbedAst =>
               if cfg.dumpElab then
-                IO.println (C0VC.Ast.Print.ppProgram elabbedProgram)
-              match C0VC.Typechecker.tc elabbedProgram with
+                IO.println (C0VC.ElabbedAst.Print.ppProgram elabbedAst)
+              match C0VC.Typechecker.tc elabbedAst with
               | .error err => pure (.error err)
-              | .ok _ =>
+              | .ok typedAst =>
                   if cfg.typecheckOnly then
                     pure (.ok none)
                   else
-                    let dceProgram := C0VC.Dce.run elabbedProgram
+                    let dceProgram := C0VC.Dce.run typedAst
                     let treeProgram := C0VC.LLVM.Tree.Trans.translate dceProgram
                     if cfg.dumpTree then
                       IO.println (C0VC.LLVM.Tree.Print.ppProgram treeProgram)
@@ -140,9 +145,9 @@ def main (args : List String) : IO UInt32 := do
   | .ok (some llvmIR) =>
         match cfg.emit with
         | .llvm =>
-            C0VC.LLVM.EmitLlvm.emit llvmIR (infile ++ ".ll")
+            C0VC.LLVM.EmitLlvm.emit llvmIR (outputPath infile ".ll")
         | .exe =>
-            let exe := infile ++ ".exe"
+            let exe := outputPath infile ".exe"
             IO.FS.writeFile exe "#!/bin/sh\necho 0\n"
             let _ ← IO.Process.output { cmd := "chmod", args := #["+x", exe] }
         return 0

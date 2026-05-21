@@ -1,4 +1,4 @@
-import C0VC.Ast
+import C0VC.Ast.TypedAst
 import C0VC.LLVM.Tree
 import C0VC.Utils.Label
 import C0VC.Utils.Temp
@@ -6,7 +6,6 @@ import C0VC.Utils.Temp
 import Std.Data.HashMap
 
 namespace C0VC.LLVM.Tree.Trans
-open C0VC.Ast
 open C0VC.LLVM.Tree
 open C0VC.Utils.Label
 open C0VC.Utils.Temp
@@ -19,18 +18,23 @@ structure Env where
   tc : TempCounter
   lc : LabelCounter
 
-def defaultValOfTau : Ast.Tau → Tree.Expr
+def translateTau : C0VC.TypedAst.Tau → Tree.Tau
+  | .int | .char => .int
+  | .bool => .bool
+  | .string => panic! "[Error] strings are not yet handled"
+  | .void => .void
+
+def defaultValOfTau : C0VC.TypedAst.Tau → Tree.Expr
   | .int => .const .int 0
   | .bool => .const .bool 0
   | .void => .const .void 0
 
   -- TODO
   | .char
-  | .string
-  | .typeName _ => .const .int 0
+  | .string => .const .int 0
 
 
-def translateBinOp (op: Ast.BinOp) : Tree.BinOp :=
+def translateBinOp (op: C0VC.TypedAst.BinOp) : Tree.BinOp :=
   match op with
   | .plus => .plus
   | .sub => .sub
@@ -49,11 +53,17 @@ def translateBinOp (op: Ast.BinOp) : Tree.BinOp :=
   | .shl => .shl
   | .shr => .shr
 
-  | .land => panic! "[Error] land (&&) should have been elaborated away but found in translate_binop"
-  | .lor => panic! "[Error] lor (||) should have been elaborated away but found in translate_binop"
+def tauOfBinOp : C0VC.TypedAst.BinOp → Tree.Tau
+  | .lt
+  | .lte
+  | .gt
+  | .gte
+  | .eq
+  | .neq => .bool
+  | _ => .int
 
 partial def translateExpr
-  (mexpr : Ast.MarkedExpr)
+  (mexpr : C0VC.TypedAst.MarkedExpr)
   (env : Std.HashMap String Temp)
   (tc : TempCounter)
   (lc : LabelCounter)
@@ -79,7 +89,7 @@ partial def translateExpr
 
       -- TODO: Currently, we call a wrapper for div/mod ops
       -- but to save a function call, we may not want to do this.
-      -- benchmark LLVM's inliner to see if this gets inlined otherwise, we should
+      -- benchmark LLVM's inliner opt to see if this gets inlined otherwise, we should
       -- not call this wrapper for all div/mod ops
       match op with
       | .div => .move tempRes (.runtimeCall .checkedDiv [transLhs, transRhs])
@@ -92,10 +102,6 @@ partial def translateExpr
     , tc'''
     , lc'')
 
-  -- TODO: we can consider having a new type for Elaborated AST, which would remove this case
-  | .unop _ _ => panic! "[Error] unops should have been elaborated away but found in translateExpr"
-
-
   -- TODO: LLVM supports select. is this really something we want to elaborate?
   | .ternary test thenVal elseVal =>
     let (tempRes, tc') := Temp.bumpAndCreate tc
@@ -107,16 +113,17 @@ partial def translateExpr
     let (cmdsElse, transElse, env''', tc'''', lc'''') := translateExpr elseVal env'' tc''' lc'''
     let (labelDone, lc''''') := Label.bumpAndCreate lc''''
 
-    (cmdsTest
+    ([.declare tempRes (translateTau mexpr.tau)]
+    ++ cmdsTest
     ++ [.ite transTest labelThen labelElse]
     ++ [.label labelThen]
     ++ cmdsThen
-    ++ [.goto labelDone]
     ++ [.move tempRes transThen]
+    ++ [.goto labelDone]
     ++ [.label labelElse]
     ++ cmdsElse
-    ++ [.goto labelDone]
     ++ [.move tempRes transElse]
+    ++ [.goto labelDone]
     ++ [.label labelDone]
 
     , .temp tempRes
@@ -149,7 +156,7 @@ partial def translateExpr
   | .stringLit _ => ([], .const .int 0, env, tc, lc)
 
 partial def translateStm
-  (mstm : Ast.MarkedStm)
+  (mstm : C0VC.TypedAst.MarkedStm)
   (env : Std.HashMap String Temp)
   (tc : TempCounter)
   (lc : LabelCounter)
@@ -225,8 +232,6 @@ partial def translateStm
     , tc''
     , lc'')
 
-  | .incr _ | .decr _ => panic! "[Error] incr/decr ops should have been elaborated away at this point but found in Trans"
-
   -- TODO: weave in type info into TempEnv
   | .declare varName _ value =>
     let (temp, tc') := Temp.bumpAndCreate tc
@@ -237,9 +242,6 @@ partial def translateStm
     let (temp, tc') := Temp.bumpAndCreate tc
     let defaultVal := defaultValOfTau tau
     ([.move temp defaultVal], env.insert varName temp, tc', lc)
-
-  | .asop _ _ _ => panic! "[Error] asops should have been elaborated away but found in translateStm"
-  | .forLit _ _ _ _ => panic! "[Error] for should have been elaborated away but found in translateStm"
 
   | .expr mexpr =>
     let (cmds, _, env', tc', lc') := translateExpr mexpr env tc lc
@@ -252,46 +254,36 @@ partial def translateStm
   | .error _ => panic! "[Error] unimplemented (error)"
   | .annotation _ => panic! "[Error] unimplemented (annotation)"
 
-def translateTau : Ast.Tau → Tree.Tau
-  | .int | .char => .int
-  | .bool => .bool
-  | .string => panic! "[Error] strings are not yet handled"
-  | .void => .void
-  | .typeName name => panic! s!"[Error] typeNames (`{name}`) should have been elaborated away but found in Trans"
-
-def translateParam (param : Ast.Param) : Tree.Arg :=
+def translateParam (param : C0VC.TypedAst.Param) : Tree.Arg :=
   let (tau, name) := param
 
   -- TODO: make this cleaner. why are we creating temp from name? seems dangerous
   (translateTau tau, Temp.fromName name)
 
-def translateGdecl (gdecl : Ast.GDecl) : Tree.FunctionDef :=
-  match gdecl with
-  | .fdecl _ _ _ _ => panic! "[Error] fdecls should have been elaborated away but found in translateGdecl"
-  | .typedef _ _ => panic! "[Error] typedefs should have been elaborated away but found in translateGdecl"
-  | .fdefn retType fname params body _ =>
-    let (temps, tc) := Temp.bumpAndCreateK 0 params.length
-    let paramsTemps := List.zip params temps
-    let (params', seededEnv) := List.foldr
-      -- TODO: i don't really like this, since it assumes that in the downstream pass, function args will preserve temp.name and also
-      -- explicitly emit %temp.name
-      (λ ((tau, varName), temp) (paramsAcc, envAcc) => ((translateTau tau, temp)::paramsAcc, envAcc.insert varName temp))
-      ([], {})
-      paramsTemps
+def translateFunctionDef (fdefn : C0VC.TypedAst.FunctionDef) : Tree.FunctionDef :=
+  let params := fdefn.params
+  let (temps, tc) := Temp.bumpAndCreateK 0 params.length
+  let paramsTemps := List.zip params temps
+  let (params', seededEnv) := List.foldr
+    -- TODO: i don't really like this, since it assumes that in the downstream pass, function args will preserve temp.name and also
+    -- explicitly emit %temp.name
+    (λ ((tau, varName), temp) (paramsAcc, envAcc) => ((translateTau tau, temp)::paramsAcc, envAcc.insert varName temp))
+    ([], {})
+    paramsTemps
 
-    let (cmds, _, _, _) := (List.foldl
-      (λ (cmdsAcc, envAcc, tcAcc, lcAcc) mstm =>
-        let (cmds, env', tc', lc') := translateStm mstm envAcc tcAcc lcAcc
-        (cmdsAcc ++ cmds, env', tc', lc')
-      )
-      ([], seededEnv, tc, 0)
-      body)
-    ( fname
-    , translateTau retType
-    , params'
-    , cmds)
+  let (cmds, _, _, _) := (List.foldl
+    (λ (cmdsAcc, envAcc, tcAcc, lcAcc) mstm =>
+      let (cmds, env', tc', lc') := translateStm mstm envAcc tcAcc lcAcc
+      (cmdsAcc ++ cmds, env', tc', lc')
+    )
+    ([], seededEnv, tc, 0)
+    fdefn.body)
+  ( fdefn.fname
+  , translateTau fdefn.retType
+  , params'
+  , cmds)
 
-def translate (program : Ast.Program) : Tree.Program :=
-  List.map translateGdecl program
+def translate (program : C0VC.TypedAst.Program) : Tree.Program :=
+  List.map translateFunctionDef program
 
 end C0VC.LLVM.Tree.Trans

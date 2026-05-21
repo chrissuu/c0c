@@ -53,6 +53,7 @@ inductive Expr where
 deriving Inhabited
 
 inductive Command where
+  | declare (dest : Temp) (tau : Tau)
   | move (dest : Temp) (src : Expr)
   | ite (test : Expr) (thenBranch : Label) (elseBranch : Label)
   | goto (label : Label)
@@ -105,6 +106,7 @@ partial def ppExpr : Expr → String
   | .runtimeCall fn args => s!"runtime_call {Runtime.name fn}({String.intercalate ", " (List.map ppExpr args)})"
 
 def ppCommand : Command → String
+  | .declare dest tau => s!"{dest.name} : {ppTau tau};"
   | .move dest src => s!"{dest.name} <- {ppExpr src};"
   | .ite test thenBranch elseBranch =>
       s!"if ({ppExpr test}) goto {thenBranch.name} else goto {elseBranch.name}"
@@ -138,6 +140,8 @@ partial def ppExprRaw (indentLevel : Nat) : Expr → String
       s!"{spaces indentLevel}RuntimeCall({Runtime.name fn}, [\n{argsStr}\n{spaces indentLevel}])"
 
 partial def ppCommandRaw (indentLevel : Nat) : Command → String
+  | .declare dest tau =>
+      s!"{spaces indentLevel}Declare({dest.name}, {ppTau tau})"
   | .move dest src =>
       s!"{spaces indentLevel}Move({dest.name},\n{ppExprRaw (indentLevel + 1) src}\n{spaces indentLevel})"
   | .ite test thenBranch elseBranch =>

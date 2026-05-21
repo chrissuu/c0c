@@ -21,7 +21,8 @@ AST.
 Author: Chris Su <chrjs@cmu.edu>
 -/
 
-import C0VC.Ast
+import C0VC.Ast.ParsedAst
+import C0VC.Ast.Trans
 import C0VC.Utils.SrcSpan
 import Std.Data.HashMap
 
@@ -197,7 +198,7 @@ def elabGDecl (gdecl : GDecl) (env : Env) : Except String (GDecl × Env) :=
     | .error err => .error err
   | _ => .ok (gdecl, env)
 
-def elabProgram (program : Ast.Program) : Except String Ast.Program :=
+private def elabParsedProgram (program : Ast.Program) : Except String Ast.Program :=
   match List.foldlM
     (m := Except String)
     (λ (progAcc, envAcc, lineNum) gdecl => do
@@ -210,5 +211,9 @@ def elabProgram (program : Ast.Program) : Except String Ast.Program :=
   | .ok (elabbedProgram, _, _) =>
     .ok (List.reverse elabbedProgram)
   | .error err => .error err
+
+def elabProgram (program : Ast.Program) : Except String C0VC.ElabbedAst.Program := do
+  let elabbedParsed ← elabParsedProgram program
+  C0VC.ElabbedAst.Trans.convertProgram elabbedParsed
 
 end C0VC.Elab

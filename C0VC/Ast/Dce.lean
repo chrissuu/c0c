@@ -1,6 +1,3 @@
-import C0VC.Ast
-open C0VC.Ast
-namespace C0VC.Dce
 /-
 DCE (Dead Code Elimination)
 
@@ -17,7 +14,11 @@ the lowering should happen on the AST before elaboration and not on this DCE AST
 Author: Chris Su <chrjs@cmu.edu>
 -/
 
-partial def dceMStm (mstm : Ast.MarkedStm) : Ast.MarkedStm × Bool :=
+import C0VC.Ast.TypedAst
+
+namespace C0VC.Dce
+
+partial def dceMStm (mstm : C0VC.TypedAst.MarkedStm) : C0VC.TypedAst.MarkedStm × Bool :=
   match mstm.node with
   | .ret _ => (mstm, true)
   | .seq first rest =>
@@ -37,17 +38,9 @@ partial def dceMStm (mstm : Ast.MarkedStm) : Ast.MarkedStm × Bool :=
   | .declare varName type value =>
       let (value', valueReturns) := dceMStm value
       ({ mstm with node := .declare varName type value' }, valueReturns)
-  | .forLit init test update body =>
-      let (init', initReturns) := dceMStm init
-      if initReturns then
-        (init', true)
-      else
-        let (body', _) := dceMStm body
-        let (update', _) := dceMStm update
-        ({ mstm with node := .forLit init' test update' body' }, false)
   | _ => (mstm, false)
 
-def dceBody (body : List Ast.MarkedStm) : List Ast.MarkedStm :=
+def dceBody (body : List C0VC.TypedAst.MarkedStm) : List C0VC.TypedAst.MarkedStm :=
   match body with
   | [] => []
   | stm :: rest =>
@@ -57,17 +50,13 @@ def dceBody (body : List Ast.MarkedStm) : List Ast.MarkedStm :=
       else
         stm' :: dceBody rest
 
-def dceGDecl (gdecl : Ast.GDecl) : Ast.GDecl :=
-  match gdecl with
-  | .fdecl .. => gdecl
-  | .fdefn retType fname params body annotations =>
-      .fdefn retType fname params (dceBody body) annotations
-  | .typedef .. => gdecl
+def dceFunctionDef (fdefn : C0VC.TypedAst.FunctionDef) : C0VC.TypedAst.FunctionDef :=
+  { fdefn with body := dceBody fdefn.body }
 
-def removeAfterReturns (program : Ast.Program) : Ast.Program :=
-  List.map dceGDecl program
+def removeAfterReturns (program : C0VC.TypedAst.Program) : C0VC.TypedAst.Program :=
+  List.map dceFunctionDef program
 
-def run (program : Ast.Program) : Ast.Program :=
+def run (program : C0VC.TypedAst.Program) : C0VC.TypedAst.Program :=
   removeAfterReturns program
 
 end C0VC.Dce
