@@ -1,12 +1,12 @@
-name = "c0c"
+name = "c0vc"
 version = "0.1.0"
-defaultTargets = ["c0c"]
+defaultTargets = ["c0vc"]
 
 [[lean_lib]]
-name = "C0C"
+name = "C0VC"
 
 [[lean_exe]]
-name = "c0c"
+name = "c0vc"
 root = "Top"
 
 [[require]]

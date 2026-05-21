@@ -1,16 +1,18 @@
-import C0C.LLVM.Tree
-import C0C.LLVM.IR
-import C0C.Utils.Temp
-import C0C.Utils.Label
+import C0VC.LLVM.Tree
+import C0VC.LLVM.IR
+import C0VC.LLVM.Runtime
+import C0VC.Utils.Temp
+import C0VC.Utils.Label
 import Std.Data.HashMap
 
-open C0C.LLVM.Tree
-open C0C.LLVM.IR
-open C0C.Utils.Temp
-open C0C.Utils.Label
+open C0VC.LLVM.Tree
+open C0VC.LLVM.IR
+open C0VC.Utils.Temp
+open C0VC.Utils.Label
 open Std.HashMap
+open C0VC.LLVM.Runtime
 
-namespace C0C.LLVM.Codegen
+namespace C0VC.LLVM.Codegen
 
 structure FunctionInfo where
   retTau : IR.Tau
@@ -84,6 +86,9 @@ def tauOfBinOp : Tree.BinOp → IR.Tau
   | .eq
   | .neq => .i1
 
+def runtimeFunctionInfo (fn : Runtime.Fn) : FunctionInfo :=
+  { retTau := Runtime.retTau fn, argsTau := Runtime.argsTau fn }
+
 def isAtom : Tree.Expr → Bool
   | .const _ _ | .temp _ => true
   | _ => false
@@ -148,6 +153,35 @@ def translateExpr (expr : Tree.Expr) (tc : TempCounter) (fenv : FEnv) (tenv : TE
       ([], [], tc, tenv)
       args
     let fInfo := fenv.get! fname
+    let (retTau, argsTau) := (fInfo.retTau, fInfo.argsTau)
+    match retTau with
+    | .void =>
+      ( stms ++ [.callVoid fname (List.zip argsTau transArgs)]
+      , .void
+      , retTau
+      , tc'
+      , tenv'
+      )
+    | _ =>
+      let (temp, tc'') := Temp.bumpAndCreate tc'
+      ( stms ++ [ .assign (.var temp) (.call retTau fname (List.zip argsTau transArgs)) ]
+      , .var temp
+      , retTau
+      , tc''
+      , tenv'
+      )
+
+  | .runtimeCall fn args =>
+    let (stms, transArgs, tc', tenv') :=
+      List.foldr
+      (λ expr (stmsAcc, argsAcc, tcAcc, tenvAcc) =>
+        let (stms', expr', _, tc', tenv') := translateExpr expr tcAcc fenv tenvAcc
+        (stms' ++ stmsAcc, expr' :: argsAcc, tc', tenv')
+      )
+      ([], [], tc, tenv)
+      args
+    let fname := Runtime.name fn
+    let fInfo := runtimeFunctionInfo fn
     let (retTau, argsTau) := (fInfo.retTau, fInfo.argsTau)
     match retTau with
     | .void =>
@@ -348,4 +382,4 @@ def translate (program : Tree.Program) : IR.Program :=
 
   transProgram
 
-end C0C.LLVM.Codegen
+end C0VC.LLVM.Codegen

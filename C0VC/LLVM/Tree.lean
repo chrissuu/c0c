@@ -5,13 +5,15 @@ See C0 reference manual here: https://c0.cs.cmu.edu/docs/c0-reference.pdf
 
 Author: Chris Su <chrjs@cmu.edu>
 -/
-import C0C.Utils.Temp
-import C0C.Utils.Label
+import C0VC.Utils.Temp
+import C0VC.Utils.Label
+import C0VC.LLVM.Runtime
 
-namespace C0C.LLVM.Tree
+namespace C0VC.LLVM.Tree
 
-open C0C.Utils.Temp
-open C0C.Utils.Label
+open C0VC.Utils.Temp
+open C0VC.Utils.Label
+open C0VC.LLVM.Runtime
 
 -- TODO: maybe consider deduplicating this definition against AST.BinOp?
 inductive BinOp where
@@ -47,6 +49,7 @@ inductive Expr where
   | temp (t : Temp)
   | binop (op : BinOp) (lhs : Expr) (rhs : Expr)
   | call (fname : String) (args : List Expr)
+  | runtimeCall (fn : Runtime.Fn) (args : List Expr)
 deriving Inhabited
 
 inductive Command where
@@ -99,6 +102,7 @@ partial def ppExpr : Expr → String
   | .temp t => t.name
   | .binop op lhs rhs => s!"({ppExpr lhs} {ppBinOp op} {ppExpr rhs})"
   | .call fname args => s!"call {fname}({String.intercalate ", " (List.map ppExpr args)})"
+  | .runtimeCall fn args => s!"runtime_call {Runtime.name fn}({String.intercalate ", " (List.map ppExpr args)})"
 
 def ppCommand : Command → String
   | .move dest src => s!"{dest.name} <- {ppExpr src};"
@@ -129,6 +133,9 @@ partial def ppExprRaw (indentLevel : Nat) : Expr → String
   | .call fname args =>
       let argsStr := String.intercalate ",\n" (args.map (ppExprRaw (indentLevel + 1)))
       s!"{spaces indentLevel}Call({fname}, [\n{argsStr}\n{spaces indentLevel}])"
+  | .runtimeCall fn args =>
+      let argsStr := String.intercalate ",\n" (args.map (ppExprRaw (indentLevel + 1)))
+      s!"{spaces indentLevel}RuntimeCall({Runtime.name fn}, [\n{argsStr}\n{spaces indentLevel}])"
 
 partial def ppCommandRaw (indentLevel : Nat) : Command → String
   | .move dest src =>
@@ -170,4 +177,4 @@ instance : ToString Command where
 instance : ToString Program where
   toString := Print.ppProgram
 
-end C0C.LLVM.Tree
+end C0VC.LLVM.Tree

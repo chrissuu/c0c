@@ -5,11 +5,11 @@ See C0 reference manual here: https://c0.cs.cmu.edu/docs/c0-reference.pdf
 
 Author: Chris Su <chrjs@cmu.edu>
 -/
-import C0C.Utils.SrcSpan
+import C0VC.Utils.SrcSpan
 
-open C0C.Utils.SrcSpan
+open C0VC.Utils.SrcSpan
 
-namespace C0C.Ast
+namespace C0VC.Ast
 
 inductive AssignOp where
   | assign     -- assignment
@@ -372,4 +372,4 @@ end Print
 instance : ToString Program where
   toString := Print.ppProgram
 
-end C0C.Ast
+end C0VC.Ast

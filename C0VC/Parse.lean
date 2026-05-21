@@ -12,18 +12,18 @@ Author: Chris Su <chrjs@cmu.edu>
 -/
 
 import Parser
-import C0C.Ast
-import C0C.Lexer
-import C0C.Utils.SrcSpan
+import C0VC.Ast
+import C0VC.Lexer
+import C0VC.Utils.SrcSpan
 
-namespace C0C.Parse
+namespace C0VC.Parse
 
 open Parser
-open C0C
-open C0C.Ast
-open C0C.Utils.SrcSpan
+open C0VC
+open C0VC.Ast
+open C0VC.Utils.SrcSpan
 
-abbrev Tok := C0C.Lexer.Token
+abbrev Tok := C0VC.Lexer.Token
 abbrev TokStream := Parser.Stream.OfList Tok
 abbrev P := SimpleParser TokStream Tok
 

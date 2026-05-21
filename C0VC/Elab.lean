@@ -21,17 +21,17 @@ AST.
 Author: Chris Su <chrjs@cmu.edu>
 -/
 
-import C0C.Ast
-import C0C.Utils.SrcSpan
+import C0VC.Ast
+import C0VC.Utils.SrcSpan
 import Std.Data.HashMap
 
-open C0C.Ast
-open C0C.Utils.SrcSpan
+open C0VC.Ast
+open C0VC.Utils.SrcSpan
 open Std.HashMap
 
 abbrev Env := Std.HashMap String Tau
 
-namespace C0C.Elab
+namespace C0VC.Elab
 partial def countUnopOfType (acc : Nat) (type : UnOp) (mexp : MarkedExpr) :=
   match mexp.node with
   | .unop type' mexp' => if type = type' then countUnopOfType (acc + 1) type mexp' else (acc, mexp)
@@ -211,4 +211,4 @@ def elabProgram (program : Ast.Program) : Except String Ast.Program :=
     .ok (List.reverse elabbedProgram)
   | .error err => .error err
 
-end C0C.Elab
+end C0VC.Elab

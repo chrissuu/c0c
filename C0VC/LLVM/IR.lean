@@ -1,9 +1,9 @@
-import C0C.Utils.Label
-import C0C.Utils.Temp
-open C0C.Utils.Label
-open C0C.Utils.Temp
+import C0VC.Utils.Label
+import C0VC.Utils.Temp
+open C0VC.Utils.Label
+open C0VC.Utils.Temp
 
-namespace C0C.LLVM.IR
+namespace C0VC.LLVM.IR
 
 inductive Tau where
   | i1
@@ -199,4 +199,4 @@ instance : ToString Stm where
 instance : ToString Program where
   toString := Print.ppProgram
 
-end C0C.LLVM.IR
+end C0VC.LLVM.IR

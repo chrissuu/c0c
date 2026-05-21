@@ -1,15 +1,15 @@
-import C0C.Ast
-import C0C.LLVM.Tree
-import C0C.Utils.Label
-import C0C.Utils.Temp
+import C0VC.Ast
+import C0VC.LLVM.Tree
+import C0VC.Utils.Label
+import C0VC.Utils.Temp
 
 import Std.Data.HashMap
 
-namespace C0C.LLVM.Tree.Trans
-open C0C.Ast
-open C0C.LLVM.Tree
-open C0C.Utils.Label
-open C0C.Utils.Temp
+namespace C0VC.LLVM.Tree.Trans
+open C0VC.Ast
+open C0VC.LLVM.Tree
+open C0VC.Utils.Label
+open C0VC.Utils.Temp
 
 abbrev TempEnv := Std.HashMap String Temp
 
@@ -72,8 +72,21 @@ partial def translateExpr
     let (tempRes, tc') := Temp.bumpAndCreate tc
     let (cmdsLhs, transLhs, env', tc'', lc') := translateExpr lhs env tc' lc
     let (cmdsRhs, transRhs, env'', tc''', lc'') := translateExpr rhs env' tc'' lc'
+    let cmd :=
 
-    (cmdsLhs ++ cmdsRhs ++ [.move tempRes (.binop (translateBinOp op) transLhs transRhs)]
+      -- in C0, division/modulus by zero is not undefined behavior and instead always
+      -- raises a runtime exception.
+
+      -- TODO: Currently, we call a wrapper for div/mod ops
+      -- but to save a function call, we may not want to do this.
+      -- benchmark LLVM's inliner to see if this gets inlined otherwise, we should
+      -- not call this wrapper for all div/mod ops
+      match op with
+      | .div => .move tempRes (.runtimeCall .checkedDiv [transLhs, transRhs])
+      | .mod => .move tempRes (.runtimeCall .checkedMod [transLhs, transRhs])
+      | _ => .move tempRes (.binop (translateBinOp op) transLhs transRhs)
+
+    (cmdsLhs ++ cmdsRhs ++ [cmd]
     , .temp tempRes
     , env''
     , tc'''
@@ -281,4 +294,4 @@ def translateGdecl (gdecl : Ast.GDecl) : Tree.FunctionDef :=
 def translate (program : Ast.Program) : Tree.Program :=
   List.map translateGdecl program
 
-end C0C.LLVM.Tree.Trans
+end C0VC.LLVM.Tree.Trans

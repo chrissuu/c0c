@@ -6,7 +6,7 @@ Lean4 command line parser library.
 
 Author: Chris Su <chrjs@cmu.edu>
 -/
-import C0C
+import C0VC
 
 inductive EmitTarget where
   | exe
@@ -28,8 +28,8 @@ structure CliConfig where
 
 private def usage : String :=
   String.intercalate "\n"
-    [ "usage: bin/c0c [-Olevel] [--emit=option] [-l header.h0] [--unsafe] infile.lN"
-    , "       bin/c0c -t infile.lN"
+    [ "usage: bin/c0vc [-Olevel] [--emit=option] [-l header.h0] [--unsafe] infile.lN"
+    , "       bin/c0vc -t infile.lN"
     , "       [--dump-tokens] [--dump-ast] [--dump-elab] [--dump-tree] [--dump-ir-raw]"
     ]
 
@@ -82,37 +82,38 @@ private def parseArgs : List String → CliConfig → Except String CliConfig
         | none => parseArgs rest { cfg with infile := some arg }
         | some _ => .error s!"multiple input files provided: {arg}"
 
-private def runFrontend (cfg : CliConfig) (infile : String) : IO (Except String (Option C0C.LLVM.IR.Program)) := do
+private def runFrontend (cfg : CliConfig) (infile : String) : IO (Except String (Option C0VC.LLVM.IR.Program)) := do
   let source ← IO.FS.readFile infile
-  match C0C.Lexer.munch infile source with
+  match C0VC.Lexer.munch infile source with
   | .error err => pure (.error err)
   | .ok tokens =>
       if cfg.dumpTokens then
-        IO.println (C0C.Token.Print.ppTokens tokens)
-      let parsed := C0C.Parse.parseProgramFromTokens tokens
+        IO.println (C0VC.Token.Print.ppTokens tokens)
+      let parsed := C0VC.Parse.parseProgramFromTokens tokens
       match parsed with
       | .error err => pure (.error err)
       | .ok program =>
           if cfg.dumpAst then
-            IO.println (C0C.Ast.Print.ppProgram program)
-          let elabbed := C0C.Elab.elabProgram program
+            IO.println (C0VC.Ast.Print.ppProgram program)
+          let elabbed := C0VC.Elab.elabProgram program
           match elabbed with
           | .error err => pure (.error err)
           | .ok elabbedProgram =>
               if cfg.dumpElab then
-                IO.println (C0C.Ast.Print.ppProgram elabbedProgram)
-              match C0C.Typechecker.tc elabbedProgram with
+                IO.println (C0VC.Ast.Print.ppProgram elabbedProgram)
+              match C0VC.Typechecker.tc elabbedProgram with
               | .error err => pure (.error err)
               | .ok _ =>
                   if cfg.typecheckOnly then
                     pure (.ok none)
                   else
-                    let treeProgram := C0C.LLVM.Tree.Trans.translate elabbedProgram
+                    let dceProgram := C0VC.Dce.run elabbedProgram
+                    let treeProgram := C0VC.LLVM.Tree.Trans.translate dceProgram
                     if cfg.dumpTree then
-                      IO.println (C0C.LLVM.Tree.Print.ppProgram treeProgram)
-                    let llvmIR := C0C.LLVM.Codegen.translate treeProgram
+                      IO.println (C0VC.LLVM.Tree.Print.ppProgram treeProgram)
+                    let llvmIR := C0VC.LLVM.Codegen.translate treeProgram
                     if cfg.dumpIrRaw then
-                      IO.println (C0C.LLVM.IR.Print.ppProgramRaw llvmIR)
+                      IO.println (C0VC.LLVM.IR.Print.ppProgramRaw llvmIR)
                     pure (.ok (some llvmIR))
 
 def main (args : List String) : IO UInt32 := do
@@ -139,7 +140,7 @@ def main (args : List String) : IO UInt32 := do
   | .ok (some llvmIR) =>
         match cfg.emit with
         | .llvm =>
-            C0C.LLVM.EmitLlvm.emit llvmIR (infile ++ ".ll")
+            C0VC.LLVM.EmitLlvm.emit llvmIR (infile ++ ".ll")
         | .exe =>
             let exe := infile ++ ".exe"
             IO.FS.writeFile exe "#!/bin/sh\necho 0\n"

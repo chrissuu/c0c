@@ -1,4 +1,4 @@
-namespace C0C.Utils.Temp
+namespace C0VC.Utils.Temp
 
 structure Temp where
   name : String
@@ -35,4 +35,4 @@ def Temp.bumpAndCreateNamed (tc : TempCounter) (name : String) : Temp × TempCou
   let tc' := TempCounter.bump tc
   ({ name := s!"t{tc'}_{name}" }, tc')
 
-end C0C.Utils.Temp
+end C0VC.Utils.Temp

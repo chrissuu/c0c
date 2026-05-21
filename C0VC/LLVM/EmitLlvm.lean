@@ -1,10 +1,12 @@
-import C0C.Ast
-import C0C.LLVM.IR
-open C0C
-open C0C.Ast
-open C0C.LLVM.IR
+import C0VC.Ast
+import C0VC.LLVM.IR
+import C0VC.LLVM.Runtime
+open C0VC
+open C0VC.Ast
+open C0VC.LLVM.IR
+open C0VC.LLVM.Runtime
 
-namespace C0C.LLVM.EmitLlvm
+namespace C0VC.LLVM.EmitLlvm
 
 def emitTau : IR.Tau → String
   | .i1 => "i1"
@@ -120,8 +122,17 @@ def emitFdefn (fdefn : IR.FunctionDef) : String :=
   ++ "\n"
   ++ "}"
 
+def emitParamTaus (taus : List IR.Tau) : String :=
+  ", ".intercalate (taus.map emitTau)
+
+def emitRuntimeDecl (fn : Runtime.Fn) : String :=
+  s!"declare {emitTau (Runtime.retTau fn)} @{Runtime.name fn}({emitParamTaus (Runtime.argsTau fn)})"
+
+def runtimeDecls : String :=
+  String.intercalate "\n" (Runtime.all.map emitRuntimeDecl)
+
 def emit (program : IR.Program) (fileName : String): IO Unit :=
   let rawProgram := "\n\n".intercalate (List.map emitFdefn program)
-  IO.FS.writeFile fileName rawProgram
+  IO.FS.writeFile fileName (runtimeDecls ++ "\n\n" ++ rawProgram)
 
-end C0C.LLVM.EmitLlvm
+end C0VC.LLVM.EmitLlvm

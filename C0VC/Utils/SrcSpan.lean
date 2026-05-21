@@ -1,4 +1,4 @@
-namespace C0C.Utils.SrcSpan
+namespace C0VC.Utils.SrcSpan
 
 def tabWidth : Nat := 4
 
@@ -37,4 +37,4 @@ def spanCover3Opt (s1? s2? s3? : Option SrcSpan) : Option SrcSpan :=
 def spanCover4Opt (s1? s2? s3? s4? : Option SrcSpan) : Option SrcSpan :=
   spanCoverOpt (spanCover3Opt s1? s2? s3?) s4?
 
-end C0C.Utils.SrcSpan
+end C0VC.Utils.SrcSpan

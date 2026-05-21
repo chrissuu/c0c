@@ -6,3 +6,5 @@ TODO:
 5. Since there is no dedicated compiler for C0, it may be worthwhile emitting LLVM IR such that programs can be tested and ran.
 6. One of the end goals may be: prove the translations hold! I.e., obligations/annotations proven to be true in Boole => these hold also in C0
     -  this means we can do pretty interesting things, no? We can make proving obligations easier by having our elaboration stage elaborate away unrelated proof material, which makes it easier for statements to be shown true/false in Boole, and the translation correctness theorem gives you Boole Correctness => Elaborated C0 correctness => C0 correctness for free
+
+Compiler name: c0vc (C0 verified compiler).

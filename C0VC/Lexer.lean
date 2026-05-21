@@ -11,15 +11,15 @@ to the lexer library.
 Author: Chris Su <chrjs@cmu.edu>
 -/
 import Std
-import C0C.Token
-import C0C.Utils.SrcSpan
+import C0VC.Token
+import C0VC.Utils.SrcSpan
 
-namespace C0C.Lexer
+namespace C0VC.Lexer
 
-open C0C.Utils.SrcSpan
+open C0VC.Utils.SrcSpan
 
-abbrev TokenKind := C0C.Token.TokenKind
-abbrev Token := C0C.Token.Token
+abbrev TokenKind := C0VC.Token.TokenKind
+abbrev Token := C0VC.Token.Token
 
 def tokenKindOptionOfString : String → Option TokenKind
   -- Static lexemes only. Dynamic lexemes (identifiers, literals) return `none`.
@@ -367,4 +367,4 @@ partial def munch (fileName : String) (body : String) : Except String (List Toke
               .error s!"lexical error at {fileName}:{line}:{col}: malformed token `{matched.toString}`"
   go body.toSlice 1 1 []
 
-end C0C.Lexer
+end C0VC.Lexer
