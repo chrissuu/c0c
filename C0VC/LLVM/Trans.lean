@@ -174,24 +174,33 @@ partial def translateStm
       (cmds ++ [.move temp expr], env', tc', lc')
 
   | .ifLit test thenBranch elseBranch =>
+    let emitLabel (cmds : List Command) :=
+      match List.getLast? cmds with
+      | some last =>
+        match last with
+        | .ret _ => false
+        | _ => true
+      | _ => true
+
     let (cmdsTest, transTest, env', tc', lc') := translateExpr test env tc lc
     let (cmdsThen, env'', tc'', lc'') := translateStm thenBranch env' tc' lc'
     let (cmdsElse, env''', tc''', lc''') := translateStm elseBranch env'' tc'' lc''
 
     let (labelThen, lc'''') := Label.bumpAndCreate lc'''
+    let emitLabelThen := emitLabel cmdsThen
     let (labelElse, lc''''') := Label.bumpAndCreate lc''''
+    let emitLabelElse := emitLabel cmdsElse
     let (labelDone, lc'''''') := Label.bumpAndCreate lc'''''
 
     (cmdsTest
     ++ [.ite transTest labelThen labelElse]
     ++ [.label labelThen]
     ++ cmdsThen
-    ++ [.goto labelDone]
+    ++ if emitLabelThen then [.goto labelDone] else []
     ++ [.label labelElse]
-    -- TODO: if this is empty, consider not emitting to remove redundant labels
     ++ cmdsElse
-    ++ [.goto labelDone]
-    ++ [.label labelDone]
+    ++ if emitLabelElse then [.goto labelDone] else []
+    ++ if (emitLabelThen || emitLabelElse) then [.label labelDone] else []
     , env'''
     , tc'''
     , lc''''''
