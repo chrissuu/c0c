@@ -1,4 +1,4 @@
-import C0VC.Ast
+import C0VC.Ast.ParsedAst
 import C0VC.LLVM.IR
 import C0VC.LLVM.Runtime
 open C0VC

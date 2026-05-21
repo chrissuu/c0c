@@ -234,6 +234,15 @@ def translateCmd
   (tenv : TEnv)
 : List IR.Stm × TempCounter × LabelCounter × TEnv :=
   match cmd with
+  | .declare dest tau =>
+    let (ptr, tc') := Temp.bumpAndCreate tc
+    let tau' := translateTau tau
+    ( [ .alloca (.ptr ptr) tau' ]
+    , tc'
+    , lc
+    , tenv.insert dest.name (TempInfo.mk ptr tau' true)
+    )
+
   | .move dest src =>
     -- transVal will be an atom (i.e., reg, imm) at this point
     let (stms, transVal, tau, tc', tenv') := translateExpr src tc fenv tenv

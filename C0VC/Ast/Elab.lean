@@ -21,7 +21,8 @@ AST.
 Author: Chris Su <chrjs@cmu.edu>
 -/
 
-import C0VC.Ast
+import C0VC.Ast.ParsedAst
+import C0VC.Ast.Trans
 import C0VC.Utils.SrcSpan
 import Std.Data.HashMap
 
@@ -197,18 +198,21 @@ def elabGDecl (gdecl : GDecl) (env : Env) : Except String (GDecl × Env) :=
     | .error err => .error err
   | _ => .ok (gdecl, env)
 
-def elabProgram (program : Ast.Program) : Except String Ast.Program :=
+private def elabParsedProgram (program : Ast.Program) : Except String Ast.Program :=
   match List.foldlM
     (m := Except String)
     (λ (progAcc, envAcc, lineNum) gdecl => do
       let (elabbedGdecl, envAcc') ← elabGDecl gdecl envAcc
-      dbg_trace s!"Line {lineNum} is ok!"
-      let isFdefn := match elabbedGdecl with | .fdefn _ _ _ _ _ => true | _ => false
+      let isFdefn := match elabbedGdecl with | .fdefn .. => true | _ => false
       pure (if isFdefn then elabbedGdecl::progAcc else progAcc, envAcc', lineNum + 1))
     ([], {}, 0)
     program with
   | .ok (elabbedProgram, _, _) =>
     .ok (List.reverse elabbedProgram)
   | .error err => .error err
+
+def elabProgram (program : Ast.Program) : Except String C0VC.ElabbedAst.Program := do
+  let elabbedParsed ← elabParsedProgram program
+  C0VC.ElabbedAst.Trans.convertProgram elabbedParsed
 
 end C0VC.Elab

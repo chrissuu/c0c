@@ -1,6 +1,3 @@
-import C0VC.Ast
-open C0VC.Ast
-namespace C0VC.Dce
 /-
 DCE (Dead Code Elimination)
 
@@ -17,8 +14,12 @@ the lowering should happen on the AST before elaboration and not on this DCE AST
 Author: Chris Su <chrjs@cmu.edu>
 -/
 
-partial def dceMStm (mstm : Ast.MarkedStm) : Ast.MarkedStm × Bool :=
-  match mstm.node with
+import C0VC.Ast.TypedAst
+
+namespace C0VC.Dce
+
+partial def dceMStm (mstm : C0VC.TypedAst.Stm) : C0VC.TypedAst.Stm × Bool :=
+  match mstm with
   | .ret _ => (mstm, true)
   | .seq first rest =>
       let (first', firstReturns) := dceMStm first
@@ -26,28 +27,20 @@ partial def dceMStm (mstm : Ast.MarkedStm) : Ast.MarkedStm × Bool :=
         (first', true)
       else
         let (rest', restReturns) := dceMStm rest
-        ({ mstm with node := .seq first' rest' }, restReturns)
+        (.seq first' rest', restReturns)
   | .ifLit test thenBranch elseBranch =>
       let (thenBranch', thenReturns) := dceMStm thenBranch
       let (elseBranch', elseReturns) := dceMStm elseBranch
-      ({ mstm with node := .ifLit test thenBranch' elseBranch' }, thenReturns && elseReturns)
+      (.ifLit test thenBranch' elseBranch', thenReturns && elseReturns)
   | .whileLit test body =>
       let (body', _) := dceMStm body
-      ({ mstm with node := .whileLit test body' }, false)
+      (.whileLit test body', false)
   | .declare varName type value =>
       let (value', valueReturns) := dceMStm value
-      ({ mstm with node := .declare varName type value' }, valueReturns)
-  | .forLit init test update body =>
-      let (init', initReturns) := dceMStm init
-      if initReturns then
-        (init', true)
-      else
-        let (body', _) := dceMStm body
-        let (update', _) := dceMStm update
-        ({ mstm with node := .forLit init' test update' body' }, false)
+      (.declare varName type value', valueReturns)
   | _ => (mstm, false)
 
-def dceBody (body : List Ast.MarkedStm) : List Ast.MarkedStm :=
+def dceBody (body : List C0VC.TypedAst.Stm) : List C0VC.TypedAst.Stm :=
   match body with
   | [] => []
   | stm :: rest =>
@@ -57,17 +50,13 @@ def dceBody (body : List Ast.MarkedStm) : List Ast.MarkedStm :=
       else
         stm' :: dceBody rest
 
-def dceGDecl (gdecl : Ast.GDecl) : Ast.GDecl :=
-  match gdecl with
-  | .fdecl .. => gdecl
-  | .fdefn retType fname params body annotations =>
-      .fdefn retType fname params (dceBody body) annotations
-  | .typedef .. => gdecl
+def dceFunctionDef (fdefn : C0VC.TypedAst.FunctionDef) : C0VC.TypedAst.FunctionDef :=
+  { fdefn with body := dceBody fdefn.body }
 
-def removeAfterReturns (program : Ast.Program) : Ast.Program :=
-  List.map dceGDecl program
+def removeAfterReturns (program : C0VC.TypedAst.Program) : C0VC.TypedAst.Program :=
+  List.map dceFunctionDef program
 
-def run (program : Ast.Program) : Ast.Program :=
+def run (program : C0VC.TypedAst.Program) : C0VC.TypedAst.Program :=
   removeAfterReturns program
 
 end C0VC.Dce
