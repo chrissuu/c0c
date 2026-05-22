@@ -150,8 +150,11 @@ partial def translateExpr
       )
       ([], [], env, tc, lc)
       args
-    let (tempRes, tc'') := Temp.bumpAndCreate tc'
-    (argCmds ++ [.move tempRes (.call fname argExps)], .temp tempRes, env', tc'', lc')
+    match texpr.tau with
+    | .void => (argCmds ++ [.call fname argExps], .const .void 0, env', tc', lc')
+    | _ =>
+      let (tempRes, tc'') := Temp.bumpAndCreate tc'
+      (argCmds ++ [.move tempRes (.call fname argExps)], .temp tempRes, env', tc'', lc')
 
   -- TODO
   | .length _ => ([], .const .int 0, env, tc, lc)
@@ -258,7 +261,14 @@ partial def translateStm
   | .nop => ([], env, tc, lc)
 
   -- TODO
-  | .assert _ => panic! "[Error] unimplemented (assert)"
+  | .assert test =>
+    let (cmds, transTest, env', tc'', lc') := translateExpr test env tc lc
+
+    ( cmds ++
+      [ .runtimeCall .assert [transTest] ]
+    , env'
+    , tc''
+    , lc')
   | .error _ => panic! "[Error] unimplemented (error)"
   | .annotation _ => panic! "[Error] unimplemented (annotation)"
 

@@ -290,6 +290,37 @@ def translateCmd
     , lc
     , tenv'')
 
+  | .call fname args =>
+    let (stms, transArgs, tc', tenv') :=
+      List.foldr
+      (λ expr (stmsAcc, argsAcc, tcAcc, tenvAcc) =>
+        let (stms', expr', _, tc', tenv') := translateExpr expr tcAcc fenv tenvAcc
+        (stms' ++ stmsAcc, expr' :: argsAcc, tc', tenv')
+      )
+      ([], [], tc, tenv)
+      args
+    let fInfo := fenv.get! fname
+    ( stms ++ [.callVoid fname (List.zip fInfo.argsTau transArgs)]
+    , tc'
+    , lc
+    , tenv')
+
+  | .runtimeCall fn args =>
+    let (stms, transArgs, tc', tenv') :=
+      List.foldr
+      (λ expr (stmsAcc, argsAcc, tcAcc, tenvAcc) =>
+        let (stms', expr', _, tc', tenv') := translateExpr expr tcAcc fenv tenvAcc
+        (stms' ++ stmsAcc, expr' :: argsAcc, tc', tenv')
+      )
+      ([], [], tc, tenv)
+      args
+    let fname := Runtime.name fn
+    let argsTau := Runtime.argsTau fn
+    ( stms ++ [.callVoid fname (List.zip argsTau transArgs)]
+    , tc'
+    , lc
+    , tenv')
+
   | .ite test thenBranch elseBranch =>
     let (stms, transTest, _, tc', tenv') := translateExpr test tc fenv tenv
 
@@ -343,22 +374,16 @@ def translateArgs (args : List Tree.Arg) : List IR.Arg := List.map translateArg 
 def translateFdefn (fdefn : Tree.FunctionDef) (fenv : FEnv) : IR.FunctionDef :=
   let (fname, tau, args, cmds) := fdefn
 
-  -- TODO: once again, this is pretty dangerous, since it sort of breaks the Temp.bumpAndCreate invariant
-  let seededTc := List.foldl
-    (λ tcAcc (_, _) =>
-      let (_, tc) := Temp.bumpAndCreate tcAcc
-      tc
-    )
-    0
-    args
-
-  let (stms, seededTEnv', tc') := List.foldr
-    (λ (tau, temp) (stmsAcc, tenvAcc, tcAcc) =>
+  let seededTc := args.length
+  let (stms, seededTEnv', tc') := List.foldl
+    (λ (stmsAcc, tenvAcc, tcAcc) (tau, temp) =>
+      let tau' := translateTau tau
       let (ptr, tc') := Temp.bumpAndCreate tcAcc
-      let alloca : IR.Stm := .alloca (.ptr ptr) (translateTau tau)
-      let store : IR.Stm := .store (translateTau tau) (.var temp) (.ptr ptr)
-      (alloca::store::stmsAcc, (tenvAcc.insert temp.name (TempInfo.mk ptr (translateTau tau) true), tc')
-    ))
+      let alloca : IR.Stm := .alloca (.ptr ptr) tau'
+      let store : IR.Stm := .store tau' (.var temp) (.ptr ptr)
+      ( stmsAcc ++ [alloca, store]
+      , tenvAcc.insert temp.name (TempInfo.mk ptr tau' true)
+      , tc'))
     ([], {}, seededTc)
     args
 

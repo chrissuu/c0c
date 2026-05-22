@@ -55,6 +55,8 @@ deriving Inhabited
 inductive Command where
   | declare (dest : Temp) (tau : Tau)
   | move (dest : Temp) (src : Expr)
+  | call (fname : String) (args : List Expr)
+  | runtimeCall (fn : Runtime.Fn) (args : List Expr)
   | ite (test : Expr) (thenBranch : Label) (elseBranch : Label)
   | goto (label : Label)
   | label (l : Label)
@@ -110,6 +112,10 @@ partial def ppExpr : Expr → String
 def ppCommand : Command → String
   | .declare dest tau => s!"{dest.name} : {ppTau tau};"
   | .move dest src => s!"{dest.name} <- {ppExpr src};"
+  | .call fname args =>
+      s!"call {fname}({String.intercalate ", " (List.map ppExpr args)});"
+  | .runtimeCall fn args =>
+      s!"runtime_call {Runtime.name fn}({String.intercalate ", " (List.map ppExpr args)});"
   | .ite test thenBranch elseBranch =>
       s!"if ({ppExpr test}) goto {thenBranch.name} else goto {elseBranch.name}"
   | .goto label => s!"goto {label.name};"
@@ -119,12 +125,18 @@ def ppCommand : Command → String
       | some val => s!"return {ppExpr val};"
       | none => "return;"
 
+def ppCommandIndented (cmd : Command) : String :=
+  match cmd with
+  | .label _ => ppCommand cmd
+  | _ => "  " ++ ppCommand cmd
+
 def ppFunctionDef (fdef : FunctionDef) : String :=
   let (fname, tau, args, commands) := fdef
-  s!"{ppTau tau} {fname}({String.intercalate ", " (List.map ppArg args)})\n{String.intercalate "\n" (List.map ppCommand commands)}"
+  let cmdsStr := String.intercalate "\n" (commands.map ppCommandIndented)
+  s!"{ppTau tau} {fname}({String.intercalate ", " (List.map ppArg args)}) \{\n{cmdsStr}\n}"
 
 def ppProgram (program : Program) : String :=
-  String.intercalate "\n" (program.map ppFunctionDef)
+  String.intercalate "\n\n" (program.map ppFunctionDef)
 
 mutual
 partial def ppExprRaw (indentLevel : Nat) : Expr → String
@@ -147,6 +159,12 @@ partial def ppCommandRaw (indentLevel : Nat) : Command → String
       s!"{spaces indentLevel}Declare({dest.name}, {ppTau tau})"
   | .move dest src =>
       s!"{spaces indentLevel}Move({dest.name},\n{ppExprRaw (indentLevel + 1) src}\n{spaces indentLevel})"
+  | .call fname args =>
+      let argsStr := String.intercalate ",\n" (args.map (ppExprRaw (indentLevel + 1)))
+      s!"{spaces indentLevel}Call({fname}, [\n{argsStr}\n{spaces indentLevel}])"
+  | .runtimeCall fn args =>
+      let argsStr := String.intercalate ",\n" (args.map (ppExprRaw (indentLevel + 1)))
+      s!"{spaces indentLevel}RuntimeCall({Runtime.name fn}, [\n{argsStr}\n{spaces indentLevel}])"
   | .ite test thenBranch elseBranch =>
       s!"{spaces indentLevel}Ite(\n{ppExprRaw (indentLevel + 1) test},\n{spaces (indentLevel + 1)}{thenBranch.name},\n{spaces (indentLevel + 1)}{elseBranch.name}\n{spaces indentLevel})"
   | .goto label =>
