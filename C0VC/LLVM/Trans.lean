@@ -215,7 +215,7 @@ partial def translateStm
     let (labelDone, lc''''') := Label.bumpAndCreateNamed lc'''' "end"
 
     ([ .goto labelGuard
-    , .label labelGuard]
+     , .label labelGuard]
     ++ cmdsTest
     ++ [ .ite transTest labelBody labelDone
        , .label labelBody]

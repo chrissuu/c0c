@@ -75,7 +75,7 @@ mutual
 inductive Stm where
   | assign (varName : String) (val : MarkedExpr)
   | ifLit (test : MarkedExpr) (thenBranch : MarkedStm) (elseBranch : MarkedStm)
-  | whileLit (test : MarkedExpr) (body : MarkedStm)
+  | whileLit (test : MarkedExpr) (body : MarkedStm) (step : MarkedStm)
   | ret (valOpt : Option MarkedExpr)
   | seq (first : MarkedStm) (rest : MarkedStm)
   | declare (varName : String) (type : Tau) (value : MarkedStm)
@@ -201,8 +201,12 @@ partial def ppStm : Stm → String
         s!"if ({ppMarkedExpr cond}) \{\n{thenStr}\n}"
       else
         s!"if ({ppMarkedExpr cond}) \{\n{thenStr}\n} else \{\n{indent elseStr}\n}"
-  | .whileLit cond body =>
-      s!"while ({ppMarkedExpr cond}) \{\n{indent (ppMarkedStm body)}\n}"
+  | .whileLit cond body step =>
+      let bodyStr :=
+        match step.node with
+        | .nop => ppMarkedStm body
+        | _ => s!"{ppMarkedStm body}\n{ppMarkedStm step}"
+      s!"while ({ppMarkedExpr cond}) \{\n{indent bodyStr}\n}"
   | .annotation a => s!"{ppMarkedAnno a}"
 
 partial def ppMarkedStm (s : MarkedStm) : String :=

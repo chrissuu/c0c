@@ -7,6 +7,14 @@ open Std.HashMap
 
 namespace C0VC.Typechecker
 
+def tauEq : Tau → Tau → Bool
+  | .int, .int => true
+  | .char, .char => true
+  | .string, .string => true
+  | .bool, .bool => true
+  | .void, .void => true
+  | _, _ => false
+
 structure FnInfo where
   retType : Tau
   fname : String
@@ -33,10 +41,16 @@ def tcMainFn (program : Program) : Except String Unit := do
   let fenv := collectFEnv program
   match fenv.get? "main" with
   | some info =>
-    if info.params.isEmpty then
+    let _ ← if info.params.isEmpty then
       .ok ()
     else
       .error "main function must not take parameters"
+
+    let _ ← if (tauEq info.retType .int) then
+      .ok ()
+    else
+      .error "main function must return an int"
+
   | none => .error "Could not find a main function"
 
 structure VarInfo where
@@ -95,13 +109,6 @@ def tcIntLitRange (n : Int) : Except String Unit :=
   else
     .error s!"integer literal {n} is outside int range"
 
-def tauEq : Tau → Tau → Bool
-  | .int, .int => true
-  | .char, .char => true
-  | .string, .string => true
-  | .bool, .bool => true
-  | .void, .void => true
-  | _, _ => false
 
 def ppTau : Tau → String
   | .int => "int"
@@ -152,7 +159,10 @@ partial def tcExpr (fenv : FEnv) (resultType : Option Tau) (mexpr : MarkedExpr) 
   | .binop op lhs rhs =>
     let tlhs ← tcExpr fenv resultType lhs venv
     let trhs ← tcExpr fenv resultType rhs venv
-    .ok (mkTExpr (.binop op tlhs trhs) (binopType op))
+    if tauEq tlhs.tau trhs.tau then
+      .ok (mkTExpr (.binop op tlhs trhs) (binopType op))
+    else
+      .error "binary operator arguments must have the same type"
   | .ternary test thenVal elseVal =>
     let ttest ← tcExpr fenv resultType test venv
     if not (tauEq ttest.tau .bool) then
@@ -236,10 +246,18 @@ partial def tcMStm (fenv : FEnv) (expectedRet : Tau) (mstm : MarkedStm) (venv : 
     let (telse, elseEnv) ← tcMStm fenv expectedRet elseBranch venv
     .ok (.ifLit ttest tthen telse, mergeVEnvAfterBranches venv thenEnv elseEnv)
 
-  | .whileLit test body =>
-    let ttest ← tcExprHasType fenv none test venv .bool "while condition"
-    let (tbody, _) ← tcMStm fenv expectedRet body venv
-    .ok (.whileLit ttest tbody, venv)
+  | .whileLit test body step =>
+    match step.node with
+    | .declare .. => .error "found a declaration in the step of a for loop"
+    | _ =>
+      let ttest ← tcExprHasType fenv none test venv .bool "while condition"
+      let (tbody, bodyEnv) ← tcMStm fenv expectedRet body venv
+      let (tstep, _) ← tcMStm fenv expectedRet step bodyEnv
+      let tbodyWithStep :=
+        match tstep with
+        | .nop => tbody
+        | _ => .seq tbody tstep
+      .ok (.whileLit ttest tbodyWithStep, venv)
 
   | .declare varName varType value =>
     if venv.contains varName then
@@ -298,11 +316,37 @@ partial def typedStmtGuaranteedReturn (mstm : C0VC.TypedAst.Stm) : Bool :=
   | .ifLit _ thenBranch elseBranch =>
     typedStmtGuaranteedReturn thenBranch && typedStmtGuaranteedReturn elseBranch
   | .declare _ _ value => typedStmtGuaranteedReturn value
-  | .whileLit _ body => typedStmtGuaranteedReturn body
   | _ => false
 
 def typedBodyGuaranteedReturn (body : List C0VC.TypedAst.Stm) : Bool :=
   body.any typedStmtGuaranteedReturn
+
+partial def collectReturnedValueOptsFromStmt (tstm : C0VC.TypedAst.Stm) :
+    List (Option C0VC.TypedAst.TypedExpr) :=
+  match tstm with
+  | .ret valOpt => [valOpt]
+  | .seq first rest =>
+    collectReturnedValueOptsFromStmt first ++ collectReturnedValueOptsFromStmt rest
+  | .ifLit _ thenBranch elseBranch =>
+    collectReturnedValueOptsFromStmt thenBranch ++ collectReturnedValueOptsFromStmt elseBranch
+  | .whileLit _ body => collectReturnedValueOptsFromStmt body
+  | .declare _ _ value => collectReturnedValueOptsFromStmt value
+  | _ => []
+
+def collectReturnedValueOpts (tbody : List C0VC.TypedAst.Stm) :
+    List (Option C0VC.TypedAst.TypedExpr) :=
+  tbody.foldr (fun tstm acc => collectReturnedValueOptsFromStmt tstm ++ acc) []
+
+def returnedValueOptHasType (expectedRet : Tau) : Option C0VC.TypedAst.TypedExpr → Bool
+  | some val => tauEq val.tau expectedRet
+  | none => tauEq expectedRet .void
+
+def tcReturnedValuesHaveType (expectedRet : Tau) (tbody : List C0VC.TypedAst.Stm) :
+    Except String Unit :=
+  if (collectReturnedValueOpts tbody).all (returnedValueOptHasType expectedRet) then
+    .ok ()
+  else
+    .error "return type does not match function return type"
 
 def tcGDecl (fenv : FEnv) (fdefn : FunctionDef) : Except String C0VC.TypedAst.FunctionDef := do
   let venv ← fdefn.params.foldlM
@@ -321,6 +365,7 @@ def tcGDecl (fenv : FEnv) (fdefn : FunctionDef) : Except String C0VC.TypedAst.Fu
     let (tmstm, _) ← tcMStm fenv fdefn.retType mstm venv
     .ok tmstm)
   let tbody := tbodyRev.reverse
+  let _ ← tcReturnedValuesHaveType fdefn.retType tbody
   if typedBodyGuaranteedReturn tbody || tauEq fdefn.retType .void then
     .ok { retType := fdefn.retType, fname := fdefn.fname, params := fdefn.params, body := tbody, annotations := tannotations }
   else

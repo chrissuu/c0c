@@ -537,7 +537,7 @@ partial def parseWhileStm : P MarkedStm := do
   let cond ← parseExpr
   let _ ← expectKindTokMsg (only .rParen) "expected ')' after while condition"
   let body ← parseStm
-  pure { node := .whileLit cond body, span := some whileTok.span }
+  pure { node := .whileLit cond body { node := .nop, span := none }, span := some whileTok.span }
 
 partial def parseForStm : P MarkedStm := do
   let forTok ← expectKindTokMsg (only .kwFor) "expected 'for'"

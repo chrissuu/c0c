@@ -104,7 +104,7 @@ inductive Stm where
   | assign (varName : String) (val : MarkedExpr)
   -- this encapsulates both ite and if statements. If no elseBranch is needed, the elseBranch is simply Nop
   | ifLit (test : MarkedExpr) (thenBranch : MarkedStm) (elseBranch : MarkedStm)
-  | whileLit (test : MarkedExpr) (body : MarkedStm)
+  | whileLit (test : MarkedExpr) (body : MarkedStm) (step : MarkedStm)
   -- none in the case of void functions.
   | ret (valOpt : Option MarkedExpr)
   | seq (first : MarkedStm) (rest : MarkedStm)
@@ -270,8 +270,12 @@ partial def ppStm : Stm → String
         s!"if ({ppMarkedExpr cond}) \{\n{thenStr}\n}"
       else
         s!"if ({ppMarkedExpr cond}) \{\n{thenStr}\n} else \{\n{indent elseStr}\n}"
-  | .whileLit cond body =>
-      s!"while ({ppMarkedExpr cond}) \{\n{indent (ppMarkedStm body)}\n}"
+  | .whileLit cond body step =>
+      let bodyStr :=
+        match step.node with
+        | .nop => ppMarkedStm body
+        | _ => s!"{ppMarkedStm body}\n{ppMarkedStm step}"
+      s!"while ({ppMarkedExpr cond}) \{\n{indent bodyStr}\n}"
   | .forLit init cond update body =>
       s!"for ({trimTrailingSemicolon (ppMarkedStm init)}; {ppMarkedExpr cond}; {trimTrailingSemicolon (ppMarkedStm update)}) \{\n{indent (ppMarkedStm body)}\n}"
   | .asop id op e =>
@@ -332,8 +336,8 @@ partial def ppStmRaw (indentLevel : Nat) : Stm → String
       s!"{spaces indentLevel}Seq(\n{ppMarkedStmRaw (indentLevel + 1) s1},\n{ppMarkedStmRaw (indentLevel + 1) s2}\n{spaces indentLevel})"
   | .ifLit cond thenBranch elseBranch =>
       s!"{spaces indentLevel}If({ppMarkedExpr cond},\n{ppMarkedStmRaw (indentLevel + 1) thenBranch},\n{ppMarkedStmRaw (indentLevel + 1) elseBranch}\n{spaces indentLevel})"
-  | .whileLit cond body =>
-      s!"{spaces indentLevel}While({ppMarkedExpr cond},\n{ppMarkedStmRaw (indentLevel + 1) body}\n{spaces indentLevel})"
+  | .whileLit cond body step =>
+      s!"{spaces indentLevel}While({ppMarkedExpr cond},\n{ppMarkedStmRaw (indentLevel + 1) body},\n{ppMarkedStmRaw (indentLevel + 1) step}\n{spaces indentLevel})"
   | .forLit init cond update body =>
       s!"{spaces indentLevel}For(\n{ppMarkedStmRaw (indentLevel + 1) init},\n{spaces (indentLevel + 1)}{ppMarkedExpr cond},\n{ppMarkedStmRaw (indentLevel + 1) update},\n{ppMarkedStmRaw (indentLevel + 1) body}\n{spaces indentLevel})"
   | .asop id op e =>

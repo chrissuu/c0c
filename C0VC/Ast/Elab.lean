@@ -63,9 +63,14 @@ partial def elabMExpr (mexp : MarkedExpr) :=
   | .unop op mexp' =>
     match op with
     | .bang =>
-      let (numBangs, reducedMexp) := countUnopOfType 0 .bang mexp'
-      if numBangs % 2 = 0 then mkElabExpr (elabMExpr reducedMexp).node mexp.span
-      else mkElabExpr (.unop .bang (elabMExpr reducedMexp)) mexp.span
+      let (numBangs, reducedMexp) := countUnopOfType 1 .bang mexp'
+      let reducedMexp' := elabMExpr reducedMexp
+      if numBangs % 2 = 0 then
+        mkElabExpr reducedMexp'.node mexp.span
+      else
+        mkElabExpr
+          (.ternary reducedMexp' (mkElabExpr .falseLit mexp.span) (mkElabExpr .trueLit mexp.span))
+          mexp.span
     | .bitNot =>
       let (numBitNot, reducedMexp) := countUnopOfType 0 .bitNot mexp'
       if numBitNot % 2 = 0 then mkElabExpr (elabMExpr reducedMexp).node mexp.span
@@ -116,9 +121,10 @@ partial def elabMStm (env : Env) (mstm : MarkedStm) : Except String MarkedStm :=
     let thenBranch' ← elabMStm env thenBranch
     let elseBranch' ← elabMStm env elseBranch
     .ok (mkElabStm (.ifLit (elabMExpr test) thenBranch' elseBranch') mstm.span)
-  | .whileLit test body =>
+  | .whileLit test body step =>
     let body' ← elabMStm env body
-    .ok (mkElabStm (.whileLit (elabMExpr test) body') mstm.span)
+    let step' ← elabMStm env step
+    .ok (mkElabStm (.whileLit (elabMExpr test) body' step') mstm.span)
   | .ret valOpt =>
     match valOpt with
     | some val => .ok (mkElabStm (.ret (some (elabMExpr val))) mstm.span)
@@ -143,8 +149,7 @@ partial def elabMStm (env : Env) (mstm : MarkedStm) : Except String MarkedStm :=
     let bodySpan := spanCoverOpt body.span update.span
     let whileSpan := spanCoverOpt test.span bodySpan
     let forSpan := spanCoverOpt init.span whileSpan
-    let desugaredBody := mkElabStm (.seq body update) bodySpan
-    let desugaredWhile := mkElabStm (.whileLit test desugaredBody) whileSpan
+    let desugaredWhile := mkElabStm (.whileLit test body update) whileSpan
     match init.node with
     | .declare varName tau initBody =>
       let scopedFor := mkElabStm (.declare varName tau (mkElabStm (.seq initBody desugaredWhile) forSpan)) forSpan
