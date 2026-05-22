@@ -72,11 +72,14 @@ partial def elabMExpr (mexp : MarkedExpr) :=
           (.ternary reducedMexp' (mkElabExpr .falseLit mexp.span) (mkElabExpr .trueLit mexp.span))
           mexp.span
     | .bitNot =>
-      let (numBitNot, reducedMexp) := countUnopOfType 0 .bitNot mexp'
-      if numBitNot % 2 = 0 then mkElabExpr (elabMExpr reducedMexp).node mexp.span
-      else mkElabExpr (.unop .bitNot (elabMExpr reducedMexp)) mexp.span
-
-      -- parity collapsing for this is probably not safe to do, so for now ignore parity collapsing
+      let (numBitNot, reducedMexp) := countUnopOfType 1 .bitNot mexp'
+      let reducedMexp' := elabMExpr reducedMexp
+      if numBitNot % 2 = 0 then
+        mkElabExpr reducedMexp'.node mexp.span
+      else
+        mkElabExpr
+          (.binop .xor reducedMexp' (mkElabExpr (.intLit (-1)) mexp.span))
+          mexp.span
     | .negative =>
       match mexp'.node with
       | .intLit n => mkElabExpr (.intLit (-n)) mexp.span

@@ -271,8 +271,8 @@ def translateFunctionDef (fdefn : C0VC.TypedAst.FunctionDef) : Tree.FunctionDef 
   let (temps, tc) := Temp.bumpAndCreateK 0 params.length
   let paramsTemps := List.zip params temps
   let (params', seededEnv) := List.foldr
-    -- TODO: i don't really like this, since it assumes that in the downstream pass, function args will preserve temp.name and also
-    -- explicitly emit %temp.name
+    -- TODO: i don't really like this, since it assumes that in the downstream pass,
+    -- function args will preserve temp.name and also explicitly emit %temp.name
     (λ ((tau, varName), temp) (paramsAcc, envAcc) => ((translateTau tau, temp)::paramsAcc, envAcc.insert varName temp))
     ([], {})
     paramsTemps
