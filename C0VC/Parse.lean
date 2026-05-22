@@ -409,7 +409,7 @@ def parseVarDefnCore : P MarkedStm := do
     | .kwVoid => Tau.void
     | _ => Tau.int
   let varName ← parseIdent
-  pure { node := .defn varName tau, span := some tauTok.span }
+  pure { node := .declare varName tau { node := .nop, span := none }, span := some tauTok.span }
 
 def parseVarDeclCore : P MarkedStm := do
   let tauTok ← expectKindTokMsg

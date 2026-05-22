@@ -42,7 +42,6 @@ inductive Stm where
   | ret (valOpt : Option TypedExpr)
   | seq (first : Stm) (rest : Stm)
   | declare (varName : String) (type : Tau) (value : Stm)
-  | defn (varName : String) (type : Tau)
   | expr (e : TypedExpr)
   | assert (test : TypedExpr)
   | error (e : TypedExpr)
@@ -110,8 +109,6 @@ mutual
 partial def ppStm : Stm → String
   | .assign id e =>
       s!"{id} = {ppTypedExpr e};"
-  | .defn id tau =>
-      s!"{ppTau tau} {id};"
   | .ret valOpt =>
       match valOpt with
       | some e => s!"return {ppTypedExpr e};"
@@ -204,8 +201,6 @@ def ppAnnoRaw (indentLevel : Nat) : Anno → String
 partial def ppStmRaw (indentLevel : Nat) : Stm → String
   | .assign id e =>
       s!"{spaces indentLevel}Assign({id},\n{ppTypedExprRaw (indentLevel + 1) e}\n{spaces indentLevel})"
-  | .defn id tau =>
-      s!"{spaces indentLevel}Defn({id}, {ppTau tau})"
   | .ret valOpt =>
       match valOpt with
       | some e => s!"{spaces indentLevel}Ret(\n{ppTypedExprRaw (indentLevel + 1) e}\n{spaces indentLevel})"

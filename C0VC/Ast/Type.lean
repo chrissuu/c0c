@@ -135,6 +135,25 @@ def binopType : BinOp → Tau
   | .eq
   | .neq => .bool
 
+def binopArgTypesOk (op : BinOp) (lhs rhs : Tau) : Bool :=
+  match op with
+  | .plus
+  | .sub
+  | .mul
+  | .div
+  | .mod
+  | .lt
+  | .lte
+  | .gt
+  | .gte
+  | .bitAnd
+  | .xor
+  | .bitOr
+  | .shl
+  | .shr => tauEq lhs .int && tauEq rhs .int
+  | .eq
+  | .neq => tauEq lhs rhs && not (tauEq lhs .void)
+
 def mkTExpr (node : C0VC.TypedAst.Expr) (tau : Tau) : C0VC.TypedAst.TypedExpr :=
   { node := node, tau := tau }
 
@@ -159,10 +178,10 @@ partial def tcExpr (fenv : FEnv) (resultType : Option Tau) (mexpr : MarkedExpr) 
   | .binop op lhs rhs =>
     let tlhs ← tcExpr fenv resultType lhs venv
     let trhs ← tcExpr fenv resultType rhs venv
-    if tauEq tlhs.tau trhs.tau then
+    if binopArgTypesOk op tlhs.tau trhs.tau then
       .ok (mkTExpr (.binop op tlhs trhs) (binopType op))
     else
-      .error "binary operator arguments must have the same type"
+      .error "binary operator arguments have invalid types"
   | .ternary test thenVal elseVal =>
     let ttest ← tcExpr fenv resultType test venv
     if not (tauEq ttest.tau .bool) then
@@ -265,11 +284,6 @@ partial def tcMStm (fenv : FEnv) (expectedRet : Tau) (mstm : MarkedStm) (venv : 
     let venv' := insertVEnv venv varName varType false
     let (tvalue, venv'') ← tcMStm fenv expectedRet value venv'
     .ok (.declare varName varType tvalue, venv''.erase varName)
-
-  | .defn varName varType =>
-    if venv.contains varName then
-      .error s!"variable {varName} declared more than once"
-    .ok (.defn varName varType, insertVEnv venv varName varType false)
 
   | .ret valOpt =>
     match valOpt with

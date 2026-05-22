@@ -116,9 +116,6 @@ partial def convertStm : C0VC.Ast.Stm → Except String C0VC.ElabbedAst.Stm
       let tau' ← convertTau tau
       let value' ← convertMStm value
       .ok (.declare varName tau' value')
-  | .defn varName tau => do
-      let tau' ← convertTau tau
-      .ok (.defn varName tau')
   | .asop .. =>
       .error "assignment operator found after elaboration"
   | .forLit .. =>

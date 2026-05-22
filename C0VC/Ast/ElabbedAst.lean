@@ -79,7 +79,6 @@ inductive Stm where
   | ret (valOpt : Option MarkedExpr)
   | seq (first : MarkedStm) (rest : MarkedStm)
   | declare (varName : String) (type : Tau) (value : MarkedStm)
-  | defn (varName : String) (type : Tau)
   | expr (e : MarkedExpr)
   | assert (test : MarkedExpr)
   | error (e : MarkedExpr)
@@ -172,8 +171,6 @@ mutual
 partial def ppStm : Stm → String
   | .assign id e =>
       s!"{id} = {ppMarkedExpr e};"
-  | .defn id tau =>
-      s!"{ppTau tau} {id};"
   | .ret valOpt =>
       match valOpt with
       | some e => s!"return {ppMarkedExpr e};"

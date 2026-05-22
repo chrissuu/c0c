@@ -243,16 +243,11 @@ partial def translateStm
     , tc''
     , lc'')
 
-  | .declare varName _ value =>
-    let (temp, tc') := Temp.bumpAndCreate tc
-    let (cmdsValue, env', tc'', lc') := translateStm value (env.insert varName temp) tc' lc
-    (cmdsValue, env'.erase varName, tc'', lc')
-
-  | .defn varName tau =>
-    dbg_trace "Found a defn, translating!"
+  | .declare varName tau value =>
     let (temp, tc') := Temp.bumpAndCreate tc
     let defaultVal := defaultValOfTau tau
-    ([.move temp defaultVal], env.insert varName temp, tc', lc)
+    let (cmdsValue, env', tc'', lc') := translateStm value (env.insert varName temp) tc' lc
+    ([.move temp defaultVal] ++ cmdsValue, env'.erase varName, tc'', lc')
 
   | .expr mexpr =>
     let (cmds, _, env', tc', lc') := translateExpr mexpr env tc lc

@@ -110,7 +110,6 @@ inductive Stm where
   | seq (first : MarkedStm) (rest : MarkedStm)
   -- the value is of type MarkedStm and not MarkedExpr, since it translates nicely to scoping rules
   | declare (varName : String) (type : Tau) (value : MarkedStm)
-  | defn (varName : String) (type : Tau)
   | asop (varName : String) (op : AssignOp) (value : MarkedExpr)
   | forLit (init : MarkedStm) (test : MarkedExpr) (update : MarkedStm) (body : MarkedStm)
   -- handles well-typed lines of the form [MarkedExpr];
@@ -241,8 +240,6 @@ mutual
 partial def ppStm : Stm → String
   | .assign id e =>
       s!"{id} = {ppMarkedExpr e};"
-  | .defn id tau =>
-      s!"{ppTau tau} {id};"
   | .ret valOpt =>
       match valOpt with
       | some e => s!"return {ppMarkedExpr e};"
@@ -321,8 +318,6 @@ mutual
 partial def ppStmRaw (indentLevel : Nat) : Stm → String
   | .assign id e =>
       s!"{spaces indentLevel}Assign({id}, {ppMarkedExpr e})"
-  | .defn id tau =>
-      s!"{spaces indentLevel}Defn({id}, {ppTau tau})"
   | .ret valOpt =>
       let retStr := match valOpt with | some e => ppMarkedExpr e | none => "None"
       s!"{spaces indentLevel}Return({retStr})"
