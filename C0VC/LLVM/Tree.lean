@@ -47,7 +47,7 @@ inductive Expr where
   -- than ints to be able to support chars/strings/etc
   | const (tau : Tau) (val : Int32)
   | temp (t : Temp)
-  | binop (op : BinOp) (lhs : Expr) (rhs : Expr)
+  | binop (op : BinOp) (tau : Tau) (lhs : Expr) (rhs : Expr)
   | call (fname : String) (args : List Expr)
   | runtimeCall (fn : Runtime.Fn) (args : List Expr)
 deriving Inhabited
@@ -101,7 +101,9 @@ partial def ppExpr : Expr → String
   -- TODO: print the type of the const?
   | .const _ val => toString val
   | .temp t => t.name
-  | .binop op lhs rhs => s!"({ppExpr lhs} {ppBinOp op} {ppExpr rhs})"
+
+  -- TODO: pp the type
+  | .binop op _ lhs rhs => s!"({ppExpr lhs} {ppBinOp op} {ppExpr rhs})"
   | .call fname args => s!"call {fname}({String.intercalate ", " (List.map ppExpr args)})"
   | .runtimeCall fn args => s!"runtime_call {Runtime.name fn}({String.intercalate ", " (List.map ppExpr args)})"
 
@@ -130,7 +132,8 @@ partial def ppExprRaw (indentLevel : Nat) : Expr → String
       s!"{spaces indentLevel}Const({val}):{ppTau tau}"
   | .temp t =>
       s!"{spaces indentLevel}Temp({t.name})"
-  | .binop op lhs rhs =>
+  -- TODO: pp the type
+  | .binop op _ lhs rhs =>
       s!"{spaces indentLevel}Binop({ppBinOp op},\n{ppExprRaw (indentLevel + 1) lhs},\n{ppExprRaw (indentLevel + 1) rhs}\n{spaces indentLevel})"
   | .call fname args =>
       let argsStr := String.intercalate ",\n" (args.map (ppExprRaw (indentLevel + 1)))

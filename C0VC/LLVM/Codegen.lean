@@ -131,12 +131,12 @@ def translateExpr (expr : Tree.Expr) (tc : TempCounter) (fenv : FEnv) (tenv : TE
 
     | none => panic! s!"[Error] saw a var ({var.name}) used before being defined"
 
-  | .binop op lhs rhs =>
-    let tau : IR.Tau := if isCmpOp op then .i1 else .i32
+  | .binop op tau lhs rhs =>
+    -- let tau : IR.Tau := if isCmpOp op then .i1 else .i32
     let (stmsLhs, transLhs, _, tc', tenv') := translateExpr lhs tc fenv tenv
     let (stmsRhs, transRhs, _, tc'', tenv'') := translateExpr rhs tc' fenv tenv'
     let (temp, tc''') := Temp.bumpAndCreate tc''
-    ( stmsLhs ++ stmsRhs ++ [ .assign (.var temp) (.binop (translateBinOp op) tau transLhs transRhs) ]
+    ( stmsLhs ++ stmsRhs ++ [ .assign (.var temp) (.binop (translateBinOp op) (translateTau tau) transLhs transRhs) ]
     , .var temp
     , tauOfBinOp op
     , tc'''

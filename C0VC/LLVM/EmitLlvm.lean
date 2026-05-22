@@ -67,8 +67,8 @@ partial def emitVal : IR.Val → String
 end
 
 def emitExpr : IR.Expr → String
-  | .binop op _ lhs rhs =>
-    s!"{if isCmpOp op then "icmp " else ""}{emitBinOp op} i32 {emitVal lhs}, {emitVal rhs}"
+  | .binop op tau lhs rhs =>
+    s!"{if isCmpOp op then "icmp " else ""}{emitBinOp op} {emitTau tau} {emitVal lhs}, {emitVal rhs}"
   | .call tau fname args =>
     s!"call {emitTau tau} @{fname}({emitFEvals args})"
 

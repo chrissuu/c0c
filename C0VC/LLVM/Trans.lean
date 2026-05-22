@@ -96,7 +96,9 @@ partial def translateExpr
       | .mod => .move tempRes (.runtimeCall .checkedMod [transLhs, transRhs])
       | .shl => .move tempRes (.runtimeCall .checkedShl [transLhs, transRhs])
       | .shr => .move tempRes (.runtimeCall .checkedShr [transLhs, transRhs])
-      | _ => .move tempRes (.binop (translateBinOp op) transLhs transRhs)
+
+      -- Assumes that binops input types are equal
+      | _ => .move tempRes (.binop (translateBinOp op) (translateTau lhs.tau) transLhs transRhs)
 
     (cmdsLhs ++ cmdsRhs ++ [cmd]
     , .temp tempRes
