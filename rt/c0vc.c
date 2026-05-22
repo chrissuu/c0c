@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-__attribute__((noreturn))
 void __c0vc_abort(const char *msg) {
   fprintf(stderr, "%s\n", msg);
   fflush(stderr);
@@ -12,7 +11,6 @@ void __c0vc_abort(const char *msg) {
   exit(1);
 }
 
-__attribute__((noreturn))
 void __c0vc_arith_error(const char *msg) {
   fprintf(stderr, "%s\n", msg);
   fflush(stderr);
