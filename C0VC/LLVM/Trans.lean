@@ -196,11 +196,11 @@ partial def translateStm
     ++ [.ite transTest labelThen labelElse]
     ++ [.label labelThen]
     ++ cmdsThen
-    ++ if emitLabelThen then [.goto labelDone] else []
+    ++ (if emitLabelThen then [.goto labelDone] else [])
     ++ [.label labelElse]
     ++ cmdsElse
-    ++ if emitLabelElse then [.goto labelDone] else []
-    ++ if (emitLabelThen || emitLabelElse) then [.label labelDone] else []
+    ++ (if emitLabelElse then [.goto labelDone] else [])
+    ++ (if (emitLabelThen || emitLabelElse) then [.label labelDone] else [])
     , env'''
     , tc'''
     , lc''''''
