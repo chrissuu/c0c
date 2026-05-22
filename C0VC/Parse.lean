@@ -290,26 +290,15 @@ partial def parseLorExpr : P MarkedExpr :=
   parseLeftAssoc parseLandExpr parseLorOp
 
 partial def parseCondExpr : P MarkedExpr := do
-  let firstTest ← parseLorExpr
-  -- Parse chained conditional segments and fold right:
-  -- a ? b : c ? d : e  ==>  a ? b : (c ? d : e)
-  let (pairsRev, finalElse) ← Parser.foldl
-    (fun (acc : List (MarkedExpr × MarkedExpr) × MarkedExpr) seg =>
-      let (pairs, currTest) := acc
-      let (thenBranch, nextTest) := seg
-      ((currTest, thenBranch) :: pairs, nextTest))
-    ([], firstTest)
-    (do
-      qmark
-      let thenBranch ← parseLorExpr
-      colon
-      let nextTest ← parseLorExpr
-      pure (thenBranch, nextTest))
-  let pairs := pairsRev.reverse
-  pure <| List.foldr
-    (fun (test, thenBranch) elseBranch => mkExpr (.ternary test thenBranch elseBranch))
-    finalElse
-    pairs
+  let test ← parseLorExpr
+  (do
+    qmark
+    let thenBranch ← parseCondExpr
+    colon
+    let elseBranch ← parseCondExpr
+    pure (mkExpr (.ternary test thenBranch elseBranch)))
+    <|>
+    pure test
 
 partial def parseArgs : P (List MarkedExpr) := do
   let firstOpt ← option? parseExpr
