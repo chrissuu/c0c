@@ -248,11 +248,18 @@ partial def translateStm
     , tc''
     , lc'')
 
-  | .declare varName tau value =>
+  | .declare varName tau init value =>
     let (temp, tc') := Temp.bumpAndCreate tc
     let defaultVal := defaultValOfTau tau
-    let (cmdsValue, env', tc'', lc') := translateStm value (env.insert varName temp) tc' lc
-    ([.move temp defaultVal] ++ cmdsValue, env'.erase varName, tc'', lc')
+    let (cmdsInit, tc'', lc'', envAfterInit) :=
+      match init with
+      | some initExpr =>
+          let (cmds, transInit, env', tc'', lc'') := translateExpr initExpr env tc' lc
+          (cmds ++ [Tree.Command.move temp transInit], tc'', lc'', env')
+      | none =>
+          ([Tree.Command.move temp defaultVal], tc', lc, env)
+    let (cmdsValue, env', tc''', lc''') := translateStm value (envAfterInit.insert varName temp) tc'' lc''
+    (cmdsInit ++ cmdsValue, env'.erase varName, tc''', lc''')
 
   | .expr mexpr =>
     let (cmds, _, env', tc', lc') := translateExpr mexpr env tc lc
@@ -279,6 +286,13 @@ def translateParam (param : C0VC.TypedAst.Param) : Tree.Arg :=
   (translateTau tau, Temp.fromName name)
 
 def translateFunctionDef (fdefn : C0VC.TypedAst.FunctionDef) : Tree.FunctionDef :=
+  if fdefn.external then
+    { fname := fdefn.fname
+    , tau := translateTau fdefn.retType
+    , args := fdefn.params.map translateParam
+    , commands := []
+    , external := true }
+  else
   let params := fdefn.params
   let (temps, tc) := Temp.bumpAndCreateK 0 params.length
   let paramsTemps := List.zip params temps
@@ -296,10 +310,11 @@ def translateFunctionDef (fdefn : C0VC.TypedAst.FunctionDef) : Tree.FunctionDef 
     )
     ([], seededEnv, tc, 0)
     fdefn.body)
-  ( fdefn.fname
-  , translateTau fdefn.retType
-  , params'
-  , cmds)
+  { fname := fdefn.fname
+  , tau := translateTau fdefn.retType
+  , args := params'
+  , commands := cmds
+  , external := false }
 
 def translate (program : C0VC.TypedAst.Program) : Tree.Program :=
   List.map translateFunctionDef program

@@ -78,7 +78,7 @@ inductive Stm where
   | whileLit (test : MarkedExpr) (body : MarkedStm) (step : MarkedStm)
   | ret (valOpt : Option MarkedExpr)
   | seq (first : MarkedStm) (rest : MarkedStm)
-  | declare (varName : String) (type : Tau) (value : MarkedStm)
+  | declare (varName : String) (type : Tau) (init : Option MarkedExpr) (body : MarkedStm)
   | expr (e : MarkedExpr)
   | assert (test : MarkedExpr)
   | error (e : MarkedExpr)
@@ -99,7 +99,11 @@ structure FunctionDef where
   body : List MarkedStm
   annotations : List MarkedStm
 
-abbrev Program := List FunctionDef
+inductive GDecl where
+  | fdecl (retType : Tau) (fname : String) (params : List Param) (external : Bool)
+  | fdefn (fdefn : FunctionDef)
+
+abbrev Program := List GDecl
 
 namespace Print
 
@@ -132,6 +136,9 @@ private def indent (str : String) : String :=
   str.splitOn "\n"
     |> List.map (fun line => "  " ++ line)
     |> String.intercalate "\n"
+
+private def spaces (n : Nat) : String :=
+  String.ofList (List.replicate (n * 2) ' ')
 
 mutual
 partial def ppExpr : Expr → String
@@ -183,12 +190,13 @@ partial def ppStm : Stm → String
       s!"assert({ppMarkedExpr test});"
   | .error e =>
       s!"error({ppMarkedExpr e});"
-  | .declare id tau body =>
+  | .declare id tau init body =>
       let bodyStr := ppStm body.node
-      if bodyStr.isEmpty || bodyStr == "/* nop */" then
-        s!"{ppTau tau} {id};"
-      else
-        s!"{ppTau tau} {id};\n{bodyStr}"
+      let declStr :=
+        match init with
+        | some e => s!"{ppTau tau} {id} = {ppMarkedExpr e};"
+        | none => s!"{ppTau tau} {id};"
+      if bodyStr.isEmpty || bodyStr == "/* nop */" then declStr else s!"{declStr}\n{bodyStr}"
   | .seq s1 s2 =>
       s!"{ppMarkedStm s1}\n{ppMarkedStm s2}"
   | .ifLit cond thenBranch elseBranch =>
@@ -230,8 +238,96 @@ def ppFunctionDef (fdefn : FunctionDef) : String :=
   else
     s!"{ppAnnos fdefn.annotations}\n{ppTau fdefn.retType} {fdefn.fname}{ppParams fdefn.params} \{\n{ppStms fdefn.body}}"
 
+def ppGDecl : GDecl → String
+  | .fdecl retType fname params true =>
+      s!"external {ppTau retType} {fname}{ppParams params};"
+  | .fdecl retType fname params false =>
+      s!"{ppTau retType} {fname}{ppParams params};"
+  | .fdefn fdefn => ppFunctionDef fdefn
+
 def ppProgram (program : Program) : String :=
-  String.intercalate "\n\n" (program.map ppFunctionDef)
+  String.intercalate "\n\n" (program.map ppGDecl)
+
+mutual
+partial def ppExprRaw (indentLevel : Nat) : Expr → String
+  | .var id => s!"{spaces indentLevel}Var({id})"
+  | .intLit n => s!"{spaces indentLevel}IntLit({n})"
+  | .trueLit => s!"{spaces indentLevel}TrueLit"
+  | .falseLit => s!"{spaces indentLevel}FalseLit"
+  | .stringLit s => s!"{spaces indentLevel}StringLit({s})"
+  | .charLit c => s!"{spaces indentLevel}CharLit({c})"
+  | .binop op lhs rhs =>
+      s!"{spaces indentLevel}Binop({ppBinOp op},\n{ppMarkedExprRaw (indentLevel + 1) lhs},\n{ppMarkedExprRaw (indentLevel + 1) rhs}\n{spaces indentLevel})"
+  | .ternary test thenBranch elseBranch =>
+      s!"{spaces indentLevel}Ternary(\n{ppMarkedExprRaw (indentLevel + 1) test},\n{ppMarkedExprRaw (indentLevel + 1) thenBranch},\n{ppMarkedExprRaw (indentLevel + 1) elseBranch}\n{spaces indentLevel})"
+  | .call fname args =>
+      let argsStr := String.intercalate ",\n" (args.map (ppMarkedExprRaw (indentLevel + 1)))
+      s!"{spaces indentLevel}Call({fname}, [\n{argsStr}\n{spaces indentLevel}])"
+  | .length arrayLike =>
+      s!"{spaces indentLevel}Length(\n{ppMarkedExprRaw (indentLevel + 1) arrayLike}\n{spaces indentLevel})"
+  | .result => s!"{spaces indentLevel}Result"
+  | .hastag => s!"{spaces indentLevel}Hastag"
+
+partial def ppMarkedExprRaw (indentLevel : Nat) (e : MarkedExpr) : String :=
+  ppExprRaw indentLevel e.node
+end
+
+def ppAnnoRaw (indentLevel : Nat) : Anno → String
+  | .requires precondition =>
+      s!"{spaces indentLevel}Requires(\n{ppMarkedExprRaw (indentLevel + 1) precondition}\n{spaces indentLevel})"
+  | .ensures postcondition =>
+      s!"{spaces indentLevel}Ensures(\n{ppMarkedExprRaw (indentLevel + 1) postcondition}\n{spaces indentLevel})"
+  | .asserts e =>
+      s!"{spaces indentLevel}Asserts(\n{ppMarkedExprRaw (indentLevel + 1) e}\n{spaces indentLevel})"
+  | .loopInvariant e =>
+      s!"{spaces indentLevel}LoopInvariant(\n{ppMarkedExprRaw (indentLevel + 1) e}\n{spaces indentLevel})"
+
+mutual
+partial def ppStmRaw (indentLevel : Nat) : Stm → String
+  | .assign id e =>
+      s!"{spaces indentLevel}Assign({id},\n{ppMarkedExprRaw (indentLevel + 1) e}\n{spaces indentLevel})"
+  | .ret valOpt =>
+      match valOpt with
+      | some e => s!"{spaces indentLevel}Ret(\n{ppMarkedExprRaw (indentLevel + 1) e}\n{spaces indentLevel})"
+      | none => s!"{spaces indentLevel}Ret(None)"
+  | .nop =>
+      s!"{spaces indentLevel}Nop"
+  | .expr e =>
+      s!"{spaces indentLevel}Expr(\n{ppMarkedExprRaw (indentLevel + 1) e}\n{spaces indentLevel})"
+  | .assert test =>
+      s!"{spaces indentLevel}Assert(\n{ppMarkedExprRaw (indentLevel + 1) test}\n{spaces indentLevel})"
+  | .error e =>
+      s!"{spaces indentLevel}Error(\n{ppMarkedExprRaw (indentLevel + 1) e}\n{spaces indentLevel})"
+  | .declare id tau init body =>
+      let initStr := match init with | some e => ppMarkedExprRaw (indentLevel + 1) e | none => s!"{spaces (indentLevel + 1)}None"
+      s!"{spaces indentLevel}Declare({id}, {ppTau tau},\n{initStr},\n{ppMarkedStmRaw (indentLevel + 1) body}\n{spaces indentLevel})"
+  | .seq s1 s2 =>
+      s!"{spaces indentLevel}Seq(\n{ppMarkedStmRaw (indentLevel + 1) s1},\n{ppMarkedStmRaw (indentLevel + 1) s2}\n{spaces indentLevel})"
+  | .ifLit cond thenBranch elseBranch =>
+      s!"{spaces indentLevel}If(\n{ppMarkedExprRaw (indentLevel + 1) cond},\n{ppMarkedStmRaw (indentLevel + 1) thenBranch},\n{ppMarkedStmRaw (indentLevel + 1) elseBranch}\n{spaces indentLevel})"
+  | .whileLit cond body step =>
+      s!"{spaces indentLevel}While(\n{ppMarkedExprRaw (indentLevel + 1) cond},\n{ppMarkedStmRaw (indentLevel + 1) body},\n{ppMarkedStmRaw (indentLevel + 1) step}\n{spaces indentLevel})"
+  | .annotation a =>
+      s!"{spaces indentLevel}Annotation(\n{ppAnnoRaw (indentLevel + 1) a.node}\n{spaces indentLevel})"
+
+partial def ppMarkedStmRaw (indentLevel : Nat) (stm : MarkedStm) : String :=
+  ppStmRaw indentLevel stm.node
+end
+
+def ppFunctionDefRaw (fdefn : FunctionDef) : String :=
+  let paramsStr := String.intercalate ", " (fdefn.params.map ppParam)
+  let annotationsStr := String.intercalate ",\n" (fdefn.annotations.map (ppMarkedStmRaw 2))
+  let bodyStr := String.intercalate ",\n" (fdefn.body.map (ppMarkedStmRaw 2))
+  s!"FunctionDef({ppTau fdefn.retType}, {fdefn.fname}, ({paramsStr}), [\n{annotationsStr}\n  ], [\n{bodyStr}\n  ])"
+
+def ppGDeclRaw : GDecl → String
+  | .fdecl retType fname params external =>
+      let paramsStr := String.intercalate ", " (params.map ppParam)
+      s!"Fdecl({ppTau retType}, {fname}, external={external}, ({paramsStr}))"
+  | .fdefn fdefn => ppFunctionDefRaw fdefn
+
+def ppProgramRaw (program : Program) : String :=
+  s!"Program:\n{String.intercalate "\n" (program.map ppGDeclRaw)}"
 
 end Print
 

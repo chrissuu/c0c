@@ -202,9 +202,9 @@ def translateExpr (expr : Tree.Expr) (tc : TempCounter) (fenv : FEnv) (tenv : TE
 
 def mkFenv (program : Tree.Program) : FEnv :=
   List.foldl
-  (λ env (fname, tau, args, _) =>
-    env.insert fname (FunctionInfo.mk (translateTau tau)
-    (List.map (λ (tau, _) => translateTau tau) args))
+  (λ env fdefn =>
+    env.insert fdefn.fname (FunctionInfo.mk (translateTau fdefn.tau)
+    (List.map (λ (tau, _) => translateTau tau) fdefn.args))
   )
   {}
   program
@@ -372,34 +372,41 @@ def translateArg (arg : Tree.Arg) : IR.Arg :=
 def translateArgs (args : List Tree.Arg) : List IR.Arg := List.map translateArg args
 
 def translateFdefn (fdefn : Tree.FunctionDef) (fenv : FEnv) : IR.FunctionDef :=
-  let (fname, tau, args, cmds) := fdefn
+  if fdefn.external then
+    { fname := fdefn.fname
+    , tau := translateTau fdefn.tau
+    , args := translateArgs fdefn.args
+    , stms := []
+    , external := true }
+  else
 
-  let seededTc := args.length
-  let (stms, seededTEnv', tc') := List.foldl
-    (λ (stmsAcc, tenvAcc, tcAcc) (tau, temp) =>
-      let tau' := translateTau tau
-      let (ptr, tc') := Temp.bumpAndCreate tcAcc
-      let alloca : IR.Stm := .alloca (.ptr ptr) tau'
-      let store : IR.Stm := .store tau' (.var temp) (.ptr ptr)
-      ( stmsAcc ++ [alloca, store]
-      , tenvAcc.insert temp.name (TempInfo.mk ptr tau' true)
-      , tc'))
-    ([], {}, seededTc)
-    args
+    let seededTc := fdefn.args.length
+    let (stms, seededTEnv', tc') := List.foldl
+      (λ (stmsAcc, tenvAcc, tcAcc) (tau, temp) =>
+        let tau' := translateTau tau
+        let (ptr, tc') := Temp.bumpAndCreate tcAcc
+        let alloca : IR.Stm := .alloca (.ptr ptr) tau'
+        let store : IR.Stm := .store tau' (.var temp) (.ptr ptr)
+        ( stmsAcc ++ [alloca, store]
+        , tenvAcc.insert temp.name (TempInfo.mk ptr tau' true)
+        , tc'))
+      ([], {}, seededTc)
+      fdefn.args
 
-  let (transCmds, _, _, _) :=
-    List.foldl
-    (λ (stmsAcc, tcAcc, lcAcc, tenvAcc) cmd =>
-      let (stms, tc', lc', tenv') := translateCmd cmd tcAcc lcAcc fenv tenvAcc
-      (stmsAcc ++ stms, tc', lc', tenv')
-    )
-    (stms, tc', 0, seededTEnv')
-    cmds
+    let (transCmds, _, _, _) :=
+      List.foldl
+      (λ (stmsAcc, tcAcc, lcAcc, tenvAcc) cmd =>
+        let (stms, tc', lc', tenv') := translateCmd cmd tcAcc lcAcc fenv tenvAcc
+        (stmsAcc ++ stms, tc', lc', tenv')
+      )
+      (stms, tc', 0, seededTEnv')
+      fdefn.commands
 
-  ( fname
-  , translateTau tau
-  , translateArgs args
-  , transCmds)
+    { fname := fdefn.fname
+    , tau := translateTau fdefn.tau
+    , args := translateArgs fdefn.args
+    , stms := transCmds
+    , external := false }
 
 
 def translate (program : Tree.Program) : IR.Program :=

@@ -383,38 +383,23 @@ def parseTau : P Tau :=
   satisfyKind (fun
     | .kwInt => some .int
     | .kwBool => some .bool
+    | .kwChar => some .char
+    | .kwString => some .string
     | .kwVoid => some .void
     | .ident name => some (.typeName name)
     | _ => none)
 
 def parseVarDefnCore : P MarkedStm := do
-  let tauTok ← expectKindTokMsg
-    (fun | .kwInt | .kwBool | .kwVoid => true | _ => false)
-    "expected type (int, bool, or void)"
-  let tau :=
-    match tauTok.kind with
-    | .kwInt => Tau.int
-    | .kwBool => Tau.bool
-    | .kwVoid => Tau.void
-    | _ => Tau.int
+  let (tau, tauSpan) ← withConsumedSpan parseTau
   let varName ← parseIdent
-  pure { node := .declare varName tau { node := .nop, span := none }, span := some tauTok.span }
+  pure { node := .declare varName tau none { node := .nop, span := none }, span := tauSpan }
 
 def parseVarDeclCore : P MarkedStm := do
-  let tauTok ← expectKindTokMsg
-    (fun | .kwInt | .kwBool | .kwVoid => true | _ => false)
-    "expected type (int, bool, or void)"
-  let tau :=
-    match tauTok.kind with
-    | .kwInt => Tau.int
-    | .kwBool => Tau.bool
-    | .kwVoid => Tau.void
-    | _ => Tau.int
+  let (tau, tauSpan) ← withConsumedSpan parseTau
   let varName ← parseIdent
   let _ ← expectKindTokMsg (only .assign) "expected '=' in variable declaration"
   let initExpr ← parseExpr
-  let initStm : MarkedStm := { node := .assign varName initExpr, span := initExpr.span }
-  pure { node := .declare varName tau initStm, span := some tauTok.span }
+  pure { node := .declare varName tau (some initExpr) { node := .nop, span := none }, span := tauSpan }
 
 def parseSimpleCore : P MarkedStm :=
   withErrorMessage "while parsing simple statement" <|
@@ -448,8 +433,8 @@ def foldStms (stms : List MarkedStm) (span : Option SrcSpan := none) : MarkedStm
   | s :: rest =>
     let restStm := foldStms rest span
     match s.node with
-    | .declare varName varType body =>
-      { node := .declare varName varType { node := .seq body restStm, span := span }, span := s.span }
+    | .declare varName varType init body =>
+      { node := .declare varName varType init { node := .seq body restStm, span := span }, span := s.span }
     | _ =>
       { node := .seq s restStm, span := span }
 

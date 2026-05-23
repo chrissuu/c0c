@@ -24,15 +24,21 @@ abbrev FEnv := Std.HashMap String FnInfo
 
 def collectFEnv (program : Program) : FEnv :=
   program.foldl
-    (fun env fdefn =>
-      env.insert fdefn.fname { retType := fdefn.retType, fname := fdefn.fname, params := fdefn.params })
+    (fun env gdecl =>
+      match gdecl with
+      | .fdecl retType fname params _ =>
+          env.insert fname { retType, fname, params }
+      | .fdefn fdefn =>
+          env.insert fdefn.fname { retType := fdefn.retType, fname := fdefn.fname, params := fdefn.params })
     {}
 
-def collectFnNames (program : Program) : List String :=
-  program.map (fun fdefn => fdefn.fname)
+def collectFnDefNames (program : Program) : List String :=
+  program.filterMap (fun
+    | .fdefn fdefn => some fdefn.fname
+    | _ => none)
 
 def tcMainFn (program : Program) : Except String Unit := do
-  let fnNames := collectFnNames program
+  let fnNames := collectFnDefNames program
   let mainFns := fnNames.filter (λ fname => fname == "main")
   let _ ← match List.length mainFns with
     | 0 => .error "Could not find a main function"
@@ -193,11 +199,14 @@ partial def tcExpr (fenv : FEnv) (resultType : Option Tau) (mexpr : MarkedExpr) 
     else
       .error "ternary branches have different types"
   | .call fname args =>
-    match fenv.get? fname with
-    | none => .error s!"function {fname} used before decl"
-    | some info =>
-      let targs ← tcCallArgs fenv resultType fname args info.params venv
-      .ok (mkTExpr (.call fname targs) info.retType)
+    if venv.contains fname then
+      .error s!"cannot call {fname}: name refers to a local variable"
+    else
+      match fenv.get? fname with
+      | none => .error s!"function {fname} used before decl"
+      | some info =>
+        let targs ← tcCallArgs fenv resultType fname args info.params venv
+        .ok (mkTExpr (.call fname targs) info.retType)
   | .length arrayLike =>
     let tarrayLike ← tcExpr fenv resultType arrayLike venv
     .ok (mkTExpr (.length tarrayLike) .int)
@@ -278,12 +287,22 @@ partial def tcMStm (fenv : FEnv) (expectedRet : Tau) (mstm : MarkedStm) (venv : 
         | _ => .seq tbody tstep
       .ok (.whileLit ttest tbodyWithStep, venv)
 
-  | .declare varName varType value =>
+  | .declare varName varType init body =>
     if venv.contains varName then
       .error s!"variable {varName} declared more than once"
-    let venv' := insertVEnv venv varName varType false
-    let (tvalue, venv'') ← tcMStm fenv expectedRet value venv'
-    .ok (.declare varName varType tvalue, venv''.erase varName)
+    if tauEq varType .void then
+      .error s!"cannot have a value of type void"
+    let (tinit, venvForBody) ←
+      match init with
+      | some initVal =>
+        let tinit ← tcExpr fenv none initVal venv
+        if not (tauEq varType tinit.tau) then
+          .error s!"assigning to {varName} an expression of different type"
+        .ok (some tinit, insertVEnv venv varName varType true)
+      | none =>
+        .ok (none, insertVEnv venv varName varType false)
+    let (tbody, venvAfter) ← tcMStm fenv expectedRet body venvForBody
+    .ok (.declare varName varType tinit tbody, venvAfter.erase varName)
 
   | .ret valOpt =>
     match valOpt with
@@ -329,7 +348,7 @@ partial def typedStmtGuaranteedReturn (mstm : C0VC.TypedAst.Stm) : Bool :=
   | .seq first rest => typedStmtGuaranteedReturn first || typedStmtGuaranteedReturn rest
   | .ifLit _ thenBranch elseBranch =>
     typedStmtGuaranteedReturn thenBranch && typedStmtGuaranteedReturn elseBranch
-  | .declare _ _ value => typedStmtGuaranteedReturn value
+  | .declare _ _ _ value => typedStmtGuaranteedReturn value
   | _ => false
 
 def typedBodyGuaranteedReturn (body : List C0VC.TypedAst.Stm) : Bool :=
@@ -344,7 +363,7 @@ partial def collectReturnedValueOptsFromStmt (tstm : C0VC.TypedAst.Stm) :
   | .ifLit _ thenBranch elseBranch =>
     collectReturnedValueOptsFromStmt thenBranch ++ collectReturnedValueOptsFromStmt elseBranch
   | .whileLit _ body => collectReturnedValueOptsFromStmt body
-  | .declare _ _ value => collectReturnedValueOptsFromStmt value
+  | .declare _ _ _ value => collectReturnedValueOptsFromStmt value
   | _ => []
 
 def collectReturnedValueOpts (tbody : List C0VC.TypedAst.Stm) :
@@ -362,7 +381,7 @@ def tcReturnedValuesHaveType (expectedRet : Tau) (tbody : List C0VC.TypedAst.Stm
   else
     .error "return type does not match function return type"
 
-def tcGDecl (fenv : FEnv) (fdefn : FunctionDef) : Except String C0VC.TypedAst.FunctionDef := do
+def tcFunctionDef (fenv : FEnv) (fdefn : FunctionDef) : Except String C0VC.TypedAst.FunctionDef := do
   let venv ← fdefn.params.foldlM
     (fun env (varType, name) =>
       if env.contains name then
@@ -381,13 +400,24 @@ def tcGDecl (fenv : FEnv) (fdefn : FunctionDef) : Except String C0VC.TypedAst.Fu
   let tbody := tbodyRev.reverse
   let _ ← tcReturnedValuesHaveType fdefn.retType tbody
   if typedBodyGuaranteedReturn tbody || tauEq fdefn.retType .void then
-    .ok { retType := fdefn.retType, fname := fdefn.fname, params := fdefn.params, body := tbody, annotations := tannotations }
+    .ok { retType := fdefn.retType, fname := fdefn.fname, params := fdefn.params, body := tbody, annotations := tannotations, external := false }
   else
     .error "Could not find a return statement in function definition"
+
+def tcGDecl (fenv : FEnv) : GDecl → Except String (Option C0VC.TypedAst.FunctionDef)
+  | .fdecl retType fname params external =>
+      if external then
+        .ok (some { retType, fname, params, body := [], annotations := [], external := true })
+      else
+        .ok none
+  | .fdefn fdefn => do
+      let tfdefn ← tcFunctionDef fenv fdefn
+      .ok (some tfdefn)
 
 def tc (program : Program) : Except String C0VC.TypedAst.Program := do
   let _ ← tcMainFn program
   let fenv := collectFEnv program
-  program.mapM (tcGDecl fenv)
+  let typed ← program.mapM (tcGDecl fenv)
+  .ok (typed.filterMap id)
 
 end C0VC.Typechecker

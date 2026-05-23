@@ -23,6 +23,7 @@ structure CliConfig where
   dumpTokens    : Bool := false
   dumpAst       : Bool := false
   dumpElab      : Bool := false
+  dumpElabRaw   : Bool := false
   dumpType      : Bool := false
   dumpTypeRaw   : Bool := false
   dumpDce       : Bool := false
@@ -34,7 +35,7 @@ private def usage : String :=
   String.intercalate "\n"
     [ "usage: bin/c0vc [-Olevel] [--emit=option] [-l header.h0] [--unsafe] infile.lN"
     , "       bin/c0vc -t infile.lN"
-    , "       [--dump-tokens] [--dump-ast] [--dump-elab] [--dump-type] [--dump-type-raw] [--dump-dce] [--dump-dce-raw] [--dump-tree] [--dump-ir-raw]"
+    , "       [--dump-tokens] [--dump-ast] [--dump-elab] [--dump-elab-raw] [--dump-type] [--dump-type-raw] [--dump-dce] [--dump-dce-raw] [--dump-tree] [--dump-ir-raw]"
     ]
 
 private def parseNatOrZero (s : String) : Nat :=
@@ -53,6 +54,22 @@ private def outputPath (infile : String) (ext : String) : String :=
   let basename := parts.getLast?.getD infile
   basename ++ ext
 
+private def parseProgramFile (file : String) : IO (Except String C0VC.Ast.Program) := do
+  let source ← IO.FS.readFile file
+  match C0VC.Lexer.munch file source with
+  | .error err => pure (.error err)
+  | .ok tokens => pure (C0VC.Parse.parseProgramFromTokens tokens)
+
+private def parseProgramFiles : List String → IO (Except String C0VC.Ast.Program)
+  | [] => pure (.ok [])
+  | file :: rest => do
+      match ← parseProgramFile file with
+      | .error err => pure (.error err)
+      | .ok program =>
+          match ← parseProgramFiles rest with
+          | .error err => pure (.error err)
+          | .ok programs => pure (.ok (program ++ programs))
+
 private def parseArgs : List String → CliConfig → Except String CliConfig
   | [], cfg => .ok cfg
   | "-t" :: rest, cfg => parseArgs rest { cfg with typecheckOnly := true }
@@ -61,6 +78,7 @@ private def parseArgs : List String → CliConfig → Except String CliConfig
   | "--dump-tokens" :: rest, cfg => parseArgs rest { cfg with dumpTokens := true }
   | "--dump-ast" :: rest, cfg => parseArgs rest { cfg with dumpAst := true }
   | "--dump-elab" :: rest, cfg => parseArgs rest { cfg with dumpElab := true }
+  | "--dump-elab-raw" :: rest, cfg => parseArgs rest { cfg with dumpElabRaw := true }
   | "--dump-type" :: rest, cfg => parseArgs rest { cfg with dumpType := true }
   | "--dump-type-raw" :: rest, cfg => parseArgs rest { cfg with dumpTypeRaw := true }
   | "--dump-dce" :: rest, cfg => parseArgs rest { cfg with dumpDce := true }
@@ -95,47 +113,53 @@ private def parseArgs : List String → CliConfig → Except String CliConfig
         | none => parseArgs rest { cfg with infile := some arg }
         | some _ => .error s!"multiple input files provided: {arg}"
 
-private def runFrontend (cfg : CliConfig) (infile : String) : IO (Except String (Option C0VC.LLVM.IR.Program)) := do
-  let source ← IO.FS.readFile infile
-  match C0VC.Lexer.munch infile source with
+private def runFrontend (cfg : CliConfig) (infile : String) :
+    IO (Except String (Option C0VC.LLVM.IR.Program)) := do
+  let headersResult ← parseProgramFiles cfg.libs
+  match headersResult with
   | .error err => pure (.error err)
-  | .ok tokens =>
-      if cfg.dumpTokens then
-        IO.println (C0VC.Token.Print.ppTokens tokens)
-      let parsed := C0VC.Parse.parseProgramFromTokens tokens
-      match parsed with
+  | .ok headers =>
+      let source ← IO.FS.readFile infile
+      match C0VC.Lexer.munch infile source with
       | .error err => pure (.error err)
-      | .ok program =>
-          if cfg.dumpAst then
-            IO.println (C0VC.Ast.Print.ppProgram program)
-          let elabbed := C0VC.Elab.elabProgram program
-          match elabbed with
+      | .ok tokens =>
+          if cfg.dumpTokens then
+            IO.println (C0VC.Token.Print.ppTokens tokens)
+          let parsed := C0VC.Parse.parseProgramFromTokens tokens
+          match parsed with
           | .error err => pure (.error err)
-          | .ok elabbedAst =>
-              if cfg.dumpElab then
-                IO.println (C0VC.ElabbedAst.Print.ppProgram elabbedAst)
-              match C0VC.Typechecker.tc elabbedAst with
+          | .ok program =>
+              if cfg.dumpAst then
+                IO.println (C0VC.Ast.Print.ppProgram program)
+              match C0VC.Elab.elabHeaderAndSource headers program with
               | .error err => pure (.error err)
-              | .ok typedAst =>
-                  if cfg.dumpType then
-                    IO.println (C0VC.TypedAst.Print.ppProgram typedAst)
-                  if cfg.dumpTypeRaw then
-                    IO.println (C0VC.TypedAst.Print.ppProgramRaw typedAst)
-                  if cfg.typecheckOnly then
-                    pure (.ok none)
-                  else
-                    let dceProgram := C0VC.Dce.run typedAst
-                    if cfg.dumpDce then
-                      IO.println (C0VC.TypedAst.Print.ppProgram dceProgram)
-                    if cfg.dumpDceRaw then
-                      IO.println (C0VC.TypedAst.Print.ppProgramRaw dceProgram)
-                    let treeProgram := C0VC.LLVM.Tree.Trans.translate dceProgram
-                    if cfg.dumpTree then
-                      IO.println (C0VC.LLVM.Tree.Print.ppProgram treeProgram)
-                    let llvmIR := C0VC.LLVM.Codegen.translate treeProgram
-                    if cfg.dumpIrRaw then
-                      IO.println (C0VC.LLVM.IR.Print.ppProgramRaw llvmIR)
-                    pure (.ok (some llvmIR))
+              | .ok elabbedAst =>
+                  if cfg.dumpElab then
+                    IO.println (C0VC.ElabbedAst.Print.ppProgram elabbedAst)
+                  if cfg.dumpElabRaw then
+                    IO.println (C0VC.ElabbedAst.Print.ppProgramRaw elabbedAst)
+                  match C0VC.Typechecker.tc elabbedAst with
+                  | .error err => pure (.error err)
+                  | .ok typedAst =>
+                      if cfg.dumpType then
+                        IO.println (C0VC.TypedAst.Print.ppProgram typedAst)
+                      if cfg.dumpTypeRaw then
+                        IO.println (C0VC.TypedAst.Print.ppProgramRaw typedAst)
+                      if cfg.typecheckOnly then
+                        pure (.ok none)
+                      else
+                        let dceProgram := C0VC.Dce.run typedAst
+                        if cfg.dumpDce then
+                          IO.println (C0VC.TypedAst.Print.ppProgram dceProgram)
+                        if cfg.dumpDceRaw then
+                          IO.println (C0VC.TypedAst.Print.ppProgramRaw dceProgram)
+                        let treeProgram := C0VC.LLVM.Tree.Trans.translate dceProgram
+                        if cfg.dumpTree then
+                          IO.println (C0VC.LLVM.Tree.Print.ppProgram treeProgram)
+                        let llvmIR := C0VC.LLVM.Codegen.translate treeProgram
+                        if cfg.dumpIrRaw then
+                          IO.println (C0VC.LLVM.IR.Print.ppProgramRaw llvmIR)
+                        pure (.ok (some llvmIR))
 
 def main (args : List String) : IO UInt32 := do
   let cfgE := parseArgs args {}

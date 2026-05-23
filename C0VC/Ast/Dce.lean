@@ -35,9 +35,9 @@ partial def dceMStm (mstm : C0VC.TypedAst.Stm) : C0VC.TypedAst.Stm × Bool :=
   | .whileLit test body =>
       let (body', _) := dceMStm body
       (.whileLit test body', false)
-  | .declare varName type value =>
+  | .declare varName type init value =>
       let (value', valueReturns) := dceMStm value
-      (.declare varName type value', valueReturns)
+      (.declare varName type init value', valueReturns)
   | _ => (mstm, false)
 
 def dceBody (body : List C0VC.TypedAst.Stm) : List C0VC.TypedAst.Stm :=

@@ -61,7 +61,13 @@ inductive Stm where
   | load (dest : Val) (tau : Tau) (ptr : Val)
 deriving Inhabited
 
-abbrev FunctionDef := String × Tau × List Arg × List Stm
+structure FunctionDef where
+  fname : String
+  tau : Tau
+  args : List Arg
+  stms : List Stm
+  external : Bool := false
+
 abbrev Program := List FunctionDef
 
 namespace Print
@@ -125,9 +131,11 @@ def ppStm : Stm → String
   | .load dest tau ptr => s!"{ppVal dest} <- load {ppTau tau} {ppVal ptr};"
 
 def ppFunctionDef (fdef : FunctionDef) : String :=
-  let (fname, tau, args, stms) := fdef
-  s!"{ppTau tau} {fname}({String.intercalate ", " (args.map ppArg)})\n"
-  ++ String.intercalate "\n" (stms.map ppStm)
+  if fdef.external then
+    s!"external {ppTau fdef.tau} {fdef.fname}({String.intercalate ", " (fdef.args.map ppArg)})"
+  else
+    s!"{ppTau fdef.tau} {fdef.fname}({String.intercalate ", " (fdef.args.map ppArg)})\n"
+    ++ String.intercalate "\n" (fdef.stms.map ppStm)
 
 def ppProgram (program : Program) : String :=
   String.intercalate "\n\n" (program.map ppFunctionDef)
@@ -174,10 +182,9 @@ def ppStmRaw (indentLevel : Nat) : Stm → String
       s!"{spaces indentLevel}Load({ppValRaw dest}, {ppTau tau}, {ppValRaw ptr})"
 
 def ppFunctionDefRaw (fdef : FunctionDef) : String :=
-  let (fname, tau, args, stms) := fdef
-  let argsStr := String.intercalate ", " (args.map ppArg)
-  let stmsStr := String.intercalate "\n" (stms.map (ppStmRaw 1))
-  s!"Fdefn({ppTau tau}, {fname}, [{argsStr}], [\n{stmsStr}\n])"
+  let argsStr := String.intercalate ", " (fdef.args.map ppArg)
+  let stmsStr := String.intercalate "\n" (fdef.stms.map (ppStmRaw 1))
+  s!"Fdefn({ppTau fdef.tau}, {fdef.fname}, external={fdef.external}, [{argsStr}], [\n{stmsStr}\n])"
 
 def ppProgramRaw (program : Program) : String :=
   "Program:\n" ++ String.intercalate "\n\n" (program.map ppFunctionDefRaw)

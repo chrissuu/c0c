@@ -64,7 +64,14 @@ inductive Command where
 deriving Inhabited
 
 abbrev Arg := Tau × Temp
-abbrev FunctionDef := String × Tau × List Arg × List Command
+
+structure FunctionDef where
+  fname : String
+  tau : Tau
+  args : List Arg
+  commands : List Command
+  external : Bool := false
+
 abbrev Program := List FunctionDef
 
 namespace Print
@@ -131,9 +138,11 @@ def ppCommandIndented (cmd : Command) : String :=
   | _ => "  " ++ ppCommand cmd
 
 def ppFunctionDef (fdef : FunctionDef) : String :=
-  let (fname, tau, args, commands) := fdef
-  let cmdsStr := String.intercalate "\n" (commands.map ppCommandIndented)
-  s!"{ppTau tau} {fname}({String.intercalate ", " (List.map ppArg args)}) \{\n{cmdsStr}\n}"
+  let cmdsStr := String.intercalate "\n" (fdef.commands.map ppCommandIndented)
+  if fdef.external then
+    s!"external {ppTau fdef.tau} {fdef.fname}({String.intercalate ", " (List.map ppArg fdef.args)});"
+  else
+    s!"{ppTau fdef.tau} {fdef.fname}({String.intercalate ", " (List.map ppArg fdef.args)}) \{\n{cmdsStr}\n}"
 
 def ppProgram (program : Program) : String :=
   String.intercalate "\n\n" (program.map ppFunctionDef)
@@ -180,10 +189,9 @@ partial def ppCommandRaw (indentLevel : Nat) : Command → String
 end
 
 def ppFunctionDefRaw (fdef : FunctionDef) : String :=
-  let (fname, tau, args, commands) := fdef
-  let argsStr := String.intercalate ", " (args.map ppArg)
-  let cmdsStr := String.intercalate "\n" (commands.map (ppCommandRaw 1))
-  s!"Fdefn({ppTau tau}, {fname}, [{argsStr}], [\n{cmdsStr}\n])"
+  let argsStr := String.intercalate ", " (fdef.args.map ppArg)
+  let cmdsStr := String.intercalate "\n" (fdef.commands.map (ppCommandRaw 1))
+  s!"Fdefn({ppTau fdef.tau}, {fdef.fname}, external={fdef.external}, [{argsStr}], [\n{cmdsStr}\n])"
 
 def ppProgramRaw (program : Program) : String :=
   s!"Program:\n{String.intercalate "\n" (program.map ppFunctionDefRaw)}"

@@ -112,10 +112,11 @@ partial def convertStm : C0VC.Ast.Stm → Except String C0VC.ElabbedAst.Stm
       let first' ← convertMStm first
       let rest' ← convertMStm rest
       .ok (.seq first' rest')
-  | .declare varName tau value => do
+  | .declare varName tau init value => do
       let tau' ← convertTau tau
+      let init' ← init.mapM convertMExpr
       let value' ← convertMStm value
-      .ok (.declare varName tau' value')
+      .ok (.declare varName tau' init' value')
   | .asop .. =>
       .error "assignment operator found after elaboration"
   | .forLit .. =>
@@ -144,26 +145,27 @@ def convertParam (param : C0VC.Ast.Param) : Except String C0VC.ElabbedAst.Param 
   let tau' ← convertTau tau
   .ok (tau', name)
 
-def convertGDecl : C0VC.Ast.GDecl → Except String (Option C0VC.ElabbedAst.FunctionDef)
+def convertGDecl : C0VC.Ast.GDecl → Except String C0VC.ElabbedAst.GDecl
   | .fdefn retType fname params body annotations => do
       let retType' ← convertTau retType
       let params' ← params.mapM convertParam
       let body' ← body.mapM convertMStm
       let annotations' ← annotations.mapM convertMStm
-      .ok (some {
+      .ok (.fdefn {
         retType := retType',
         fname,
         params := params',
         body := body',
         annotations := annotations'
       })
-  | .fdecl .. =>
-      .error "function declaration found after elaboration"
+  | .fdecl retType fname params _ => do
+      let retType' ← convertTau retType
+      let params' ← params.mapM convertParam
+      .ok (.fdecl retType' fname params' true)
   | .typedef .. =>
       .error "typedef found after elaboration"
 
 def convertProgram (program : C0VC.Ast.Program) : Except String C0VC.ElabbedAst.Program := do
-  let converted ← program.mapM convertGDecl
-  .ok (converted.filterMap id)
+  program.mapM convertGDecl
 
 end C0VC.ElabbedAst.Trans

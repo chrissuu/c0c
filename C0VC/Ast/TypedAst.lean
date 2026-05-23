@@ -41,7 +41,7 @@ inductive Stm where
   | whileLit (test : TypedExpr) (body : Stm)
   | ret (valOpt : Option TypedExpr)
   | seq (first : Stm) (rest : Stm)
-  | declare (varName : String) (type : Tau) (value : Stm)
+  | declare (varName : String) (type : Tau) (init : Option TypedExpr) (body : Stm)
   | expr (e : TypedExpr)
   | assert (test : TypedExpr)
   | error (e : TypedExpr)
@@ -55,6 +55,7 @@ structure FunctionDef where
   params : List Param
   body : List Stm
   annotations : List Stm
+  external : Bool := false
 
 abbrev Program := List FunctionDef
 
@@ -121,12 +122,13 @@ partial def ppStm : Stm → String
       s!"assert({ppTypedExpr test});"
   | .error e =>
       s!"error({ppTypedExpr e});"
-  | .declare id tau body =>
+  | .declare id tau init body =>
       let bodyStr := ppStm body
-      if bodyStr.isEmpty || bodyStr == "/* nop */" then
-        s!"{ppTau tau} {id};"
-      else
-        s!"{ppTau tau} {id};\n{bodyStr}"
+      let declStr :=
+        match init with
+        | some e => s!"{ppTau tau} {id} = {ppTypedExpr e};"
+        | none => s!"{ppTau tau} {id};"
+      if bodyStr.isEmpty || bodyStr == "/* nop */" then declStr else s!"{declStr}\n{bodyStr}"
   | .seq s1 s2 =>
       s!"{ppStm s1}\n{ppStm s2}"
   | .ifLit cond thenBranch elseBranch =>
@@ -156,7 +158,9 @@ def ppAnnos (annos : List Stm) : String :=
   s!"[{annosStr}]"
 
 def ppFunctionDef (fdefn : FunctionDef) : String :=
-  if fdefn.body.isEmpty then
+  if fdefn.external then
+    s!"external {ppTau fdefn.retType} {fdefn.fname}{ppParams fdefn.params};"
+  else if fdefn.body.isEmpty then
     s!"{ppAnnos fdefn.annotations}\n{ppTau fdefn.retType} {fdefn.fname}{ppParams fdefn.params} \{\n}"
   else
     s!"{ppAnnos fdefn.annotations}\n{ppTau fdefn.retType} {fdefn.fname}{ppParams fdefn.params} \{\n{ppStms fdefn.body}}"
@@ -213,8 +217,9 @@ partial def ppStmRaw (indentLevel : Nat) : Stm → String
       s!"{spaces indentLevel}Assert(\n{ppTypedExprRaw (indentLevel + 1) test}\n{spaces indentLevel})"
   | .error e =>
       s!"{spaces indentLevel}Error(\n{ppTypedExprRaw (indentLevel + 1) e}\n{spaces indentLevel})"
-  | .declare id tau body =>
-      s!"{spaces indentLevel}Declare({id}, {ppTau tau},\n{ppStmRaw (indentLevel + 1) body}\n{spaces indentLevel})"
+  | .declare id tau init body =>
+      let initStr := match init with | some e => ppTypedExprRaw (indentLevel + 1) e | none => s!"{spaces (indentLevel + 1)}None"
+      s!"{spaces indentLevel}Declare({id}, {ppTau tau},\n{initStr},\n{ppStmRaw (indentLevel + 1) body}\n{spaces indentLevel})"
   | .seq s1 s2 =>
       s!"{spaces indentLevel}Seq(\n{ppStmRaw (indentLevel + 1) s1},\n{ppStmRaw (indentLevel + 1) s2}\n{spaces indentLevel})"
   | .ifLit cond thenBranch elseBranch =>
@@ -228,7 +233,7 @@ def ppFunctionDefRaw (fdefn : FunctionDef) : String :=
   let paramsStr := String.intercalate ", " (fdefn.params.map ppParam)
   let annotationsStr := String.intercalate ",\n" (fdefn.annotations.map (ppStmRaw 2))
   let bodyStr := String.intercalate ",\n" (fdefn.body.map (ppStmRaw 2))
-  s!"FunctionDef({ppTau fdefn.retType}, {fdefn.fname}, ({paramsStr}), [\n{annotationsStr}\n  ], [\n{bodyStr}\n  ])"
+  s!"FunctionDef({ppTau fdefn.retType}, {fdefn.fname}, external={fdefn.external}, ({paramsStr}), [\n{annotationsStr}\n  ], [\n{bodyStr}\n  ])"
 
 def ppProgramRaw (program : Program) : String :=
   s!"Program:\n{String.intercalate "\n" (program.map ppFunctionDefRaw)}"

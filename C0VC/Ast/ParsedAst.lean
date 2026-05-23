@@ -108,8 +108,7 @@ inductive Stm where
   -- none in the case of void functions.
   | ret (valOpt : Option MarkedExpr)
   | seq (first : MarkedStm) (rest : MarkedStm)
-  -- the value is of type MarkedStm and not MarkedExpr, since it translates nicely to scoping rules
-  | declare (varName : String) (type : Tau) (value : MarkedStm)
+  | declare (varName : String) (type : Tau) (init : Option MarkedExpr) (body : MarkedStm)
   | asop (varName : String) (op : AssignOp) (value : MarkedExpr)
   | forLit (init : MarkedStm) (test : MarkedExpr) (update : MarkedStm) (body : MarkedStm)
   -- handles well-typed lines of the form [MarkedExpr];
@@ -252,12 +251,13 @@ partial def ppStm : Stm → String
       s!"assert({ppMarkedExpr test});"
   | .error e =>
       s!"error({ppMarkedExpr e});"
-  | .declare id tau body =>
+  | .declare id tau init body =>
       let bodyStr := ppStm body.node
-      if bodyStr.isEmpty || bodyStr == "/* nop */" then
-        s!"{ppTau tau} {id};"
-      else
-        s!"{ppTau tau} {id};\n{bodyStr}"
+      let declStr :=
+        match init with
+        | some e => s!"{ppTau tau} {id} = {ppMarkedExpr e};"
+        | none => s!"{ppTau tau} {id};"
+      if bodyStr.isEmpty || bodyStr == "/* nop */" then declStr else s!"{declStr}\n{bodyStr}"
   | .seq s1 s2 =>
       s!"{ppMarkedStm s1}\n{ppMarkedStm s2}"
   | .ifLit cond thenBranch elseBranch =>
@@ -325,8 +325,9 @@ partial def ppStmRaw (indentLevel : Nat) : Stm → String
       s!"{spaces indentLevel}Nop"
   | .expr e =>
       s!"{spaces indentLevel}Expr({ppMarkedExpr e})"
-  | .declare id tau body =>
-      s!"{spaces indentLevel}Declare({id}, {ppTau tau},\n{ppMarkedStmRaw (indentLevel + 1) body}\n{spaces indentLevel})"
+  | .declare id tau init body =>
+      let initStr := match init with | some e => ppMarkedExpr e | none => "None"
+      s!"{spaces indentLevel}Declare({id}, {ppTau tau}, {initStr},\n{ppMarkedStmRaw (indentLevel + 1) body}\n{spaces indentLevel})"
   | .seq s1 s2 =>
       s!"{spaces indentLevel}Seq(\n{ppMarkedStmRaw (indentLevel + 1) s1},\n{ppMarkedStmRaw (indentLevel + 1) s2}\n{spaces indentLevel})"
   | .ifLit cond thenBranch elseBranch =>
