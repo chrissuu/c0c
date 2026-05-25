@@ -325,7 +325,12 @@ partial def tcMStm (fenv : FEnv) (expectedRet : Tau) (mstm : MarkedStm) (venv : 
 
   | .expr e =>
     let te ← tcExpr fenv none e venv
-    .ok (.expr te, venv)
+    match e.node with
+    | .ternary .. =>
+      if tauEq te.tau .void then .error "ternary exp as stm cannot have void types"
+      else .ok (.expr te, venv)
+    | _ =>
+      .ok (.expr te, venv)
 
   | .assert test =>
     let ttest ← tcExprHasType fenv none test venv .bool "assert condition"
