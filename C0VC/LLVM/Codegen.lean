@@ -246,6 +246,13 @@ def translateCmd
   | .move dest src =>
     -- transVal will be an atom (i.e., reg, imm) at this point
     let (stms, transVal, tau, tc', tenv') := translateExpr src tc fenv tenv
+    let bindDestToPtr (tcBase : TempCounter) (tenvBase : TEnv) :=
+      let (ptr, tcNext) := Temp.bumpAndCreate tcBase
+      let destTempInfo := TempInfo.mk ptr tau true
+      ( stms ++ [ Stm.alloca (.ptr ptr) tau ]
+      , some ptr
+      , tcNext
+      , tenvBase.insert dest.name destTempInfo)
     let bindDestToValue (value : IR.Val) (tcBase : TempCounter) (tenvBase : TEnv) :=
       match value with
       | .var t =>
@@ -256,12 +263,7 @@ def translateCmd
         , tenvBase.insert dest.name destTempInfo)
 
       | .bitVec _ =>
-        let (ptr, tcNext) := Temp.bumpAndCreate tcBase
-        let destTempInfo := TempInfo.mk ptr tau true
-        ( stms ++ [ Stm.alloca (.ptr ptr) tau ]
-        , some ptr
-        , tcNext
-        , tenvBase.insert dest.name destTempInfo)
+        bindDestToPtr tcBase tenvBase
 
       | _ => panic! "[Error] after translating expr type, expect REG/IMM but found something else"
     let (stms', ptrOpt, tc'', tenv'') :=
@@ -279,8 +281,8 @@ def translateCmd
           bindDestToValue transVal tc' tenv'
 
       | none =>
-        -- dest is a new temp, so update tenv here as well
-        bindDestToValue transVal tc' tenv'
+        -- dest is a new temp, so allocate a distinct slot for it.
+        bindDestToPtr tc' tenv'
 
     let destIsPtr := Option.isSome ptrOpt
 
@@ -300,10 +302,18 @@ def translateCmd
       ([], [], tc, tenv)
       args
     let fInfo := fenv.get! fname
-    ( stms ++ [.callVoid fname (List.zip fInfo.argsTau transArgs)]
-    , tc'
-    , lc
-    , tenv')
+    match fInfo.retTau with
+    | .void =>
+      ( stms ++ [.callVoid fname (List.zip fInfo.argsTau transArgs)]
+      , tc'
+      , lc
+      , tenv')
+    | retTau =>
+      let (temp, tc'') := Temp.bumpAndCreate tc'
+      ( stms ++ [.assign (.var temp) (.call retTau fname (List.zip fInfo.argsTau transArgs))]
+      , tc''
+      , lc
+      , tenv')
 
   | .runtimeCall fn args =>
     let (stms, transArgs, tc', tenv') :=
@@ -316,10 +326,19 @@ def translateCmd
       args
     let fname := Runtime.name fn
     let argsTau := Runtime.argsTau fn
-    ( stms ++ [.callVoid fname (List.zip argsTau transArgs)]
-    , tc'
-    , lc
-    , tenv')
+    let retTau := Runtime.retTau fn
+    match retTau with
+    | .void =>
+      ( stms ++ [.callVoid fname (List.zip argsTau transArgs)]
+      , tc'
+      , lc
+      , tenv')
+    | _ =>
+      let (temp, tc'') := Temp.bumpAndCreate tc'
+      ( stms ++ [.assign (.var temp) (.call retTau fname (List.zip argsTau transArgs))]
+      , tc''
+      , lc
+      , tenv')
 
   | .ite test thenBranch elseBranch =>
     let (stms, transTest, _, tc', tenv') := translateExpr test tc fenv tenv
@@ -408,19 +427,38 @@ def translateFdefn (fdefn : Tree.FunctionDef) (fenv : FEnv) : IR.FunctionDef :=
     , stms := transCmds
     , external := false }
 
+/-
+Void returns may not have an explicit return, but this
+is not allowed in llvm. Hence, we must make returns explicit
+for void functions
+-/
+def fillVoidReturns (stms : List IR.Stm) : List IR.Stm :=
+  let fillReturn s :=
+    match s with
+    | .ret _ | .brJump _ | .brIte .. => [s]
+    | _ => [s, .ret .void ]
+
+  match stms with
+  | [] => [ .ret .void ]
+  | s::[] => fillReturn s
+  | s1::s2::ss =>
+    match s2 with
+    | .label _ =>
+      fillReturn s1 ++
+      s2 :: fillVoidReturns ss
+    | _ => s1::fillVoidReturns (s2::ss)
 
 def translate (program : Tree.Program) : IR.Program :=
   let fenvInit := mkFenv program
 
-  let transProgram :=
-    List.foldl
-    (λ fdefnAcc fdefn =>
-      let (transFdefn) := translateFdefn fdefn fenvInit
-      (fdefnAcc ++ [transFdefn])
-    )
-    []
-    program
+  List.foldl
+  (λ fdefnAcc fdefn =>
+    let transFdefn := translateFdefn fdefn fenvInit
+    let transFdefnVoids := { transFdefn with stms := fillVoidReturns transFdefn.stms }
 
-  transProgram
+    (fdefnAcc ++ [transFdefnVoids])
+  )
+  []
+  program
 
 end C0VC.LLVM.Codegen

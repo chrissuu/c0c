@@ -29,13 +29,14 @@ structure CliConfig where
   dumpDce       : Bool := false
   dumpDceRaw    : Bool := false
   dumpTree      : Bool := false
+  dumpTreeRaw   : Bool := false
   dumpIrRaw     : Bool := false
 
 private def usage : String :=
   String.intercalate "\n"
     [ "usage: bin/c0vc [-Olevel] [--emit=option] [-l header.h0] [--unsafe] infile.lN"
     , "       bin/c0vc -t infile.lN"
-    , "       [--dump-tokens] [--dump-ast] [--dump-elab] [--dump-elab-raw] [--dump-type] [--dump-type-raw] [--dump-dce] [--dump-dce-raw] [--dump-tree] [--dump-ir-raw]"
+    , "       [--dump-tokens] [--dump-ast] [--dump-elab] [--dump-elab-raw] [--dump-type] [--dump-type-raw] [--dump-dce] [--dump-dce-raw] [--dump-tree] [--dump-tree-raw] [--dump-ir-raw]"
     ]
 
 private def parseNatOrZero (s : String) : Nat :=
@@ -84,6 +85,7 @@ private def parseArgs : List String → CliConfig → Except String CliConfig
   | "--dump-dce" :: rest, cfg => parseArgs rest { cfg with dumpDce := true }
   | "--dump-dce-raw" :: rest, cfg => parseArgs rest { cfg with dumpDceRaw := true }
   | "--dump-tree" :: rest, cfg => parseArgs rest { cfg with dumpTree := true }
+  | "--dump-tree-raw" :: rest, cfg => parseArgs rest { cfg with dumpTreeRaw := true }
   | "--dump-ir-raw" :: rest, cfg => parseArgs rest { cfg with dumpIrRaw := true }
   | "-l" :: lib :: rest, cfg => parseArgs rest { cfg with libs := cfg.libs.concat lib }
   | "--lib" :: lib :: rest, cfg => parseArgs rest { cfg with libs := cfg.libs.concat lib }
@@ -156,6 +158,8 @@ private def runFrontend (cfg : CliConfig) (infile : String) :
                         let treeProgram := C0VC.LLVM.Tree.Trans.translate dceProgram
                         if cfg.dumpTree then
                           IO.println (C0VC.LLVM.Tree.Print.ppProgram treeProgram)
+                        if cfg.dumpTreeRaw then
+                          IO.println (C0VC.LLVM.Tree.Print.ppProgramRaw treeProgram)
                         let llvmIR := C0VC.LLVM.Codegen.translate treeProgram
                         if cfg.dumpIrRaw then
                           IO.println (C0VC.LLVM.IR.Print.ppProgramRaw llvmIR)
