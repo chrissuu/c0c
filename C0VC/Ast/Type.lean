@@ -308,7 +308,9 @@ partial def tcMStm (fenv : FEnv) (expectedRet : Tau) (mstm : MarkedStm) (venv : 
     match valOpt with
     | some val =>
       let tval ← tcExpr fenv none val venv
-      if tauEq tval.tau expectedRet then
+      if tauEq tval.tau .void then
+        .error "cannot return a void type as a value of a return statement"
+      else if tauEq tval.tau expectedRet then
         .ok (.ret (some tval), initializeAllVEnv venv)
       else
         .error "return type does not match function return type"
